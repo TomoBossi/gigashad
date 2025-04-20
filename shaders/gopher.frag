@@ -7,6 +7,7 @@ uniform vec2 iResolution;
 uniform vec3 iPosition;
 uniform vec3 iPositionFixed;
 uniform vec3 iDirection;
+uniform vec4 iSliders;
 
 float smin(float a, float b, float k) {
   float h = max(k-abs(a-b), 0.0)/k;
@@ -289,8 +290,8 @@ vec3 applyFog(vec3 color, float dist, vec3 fogColor, float density) {
 void main() {
   vec2 uv = (gl_FragCoord.xy-.5*iResolution.xy)/iResolution.y;
   
-  vec3 ro = iPosition - vec3(0.0, 0.0, 3.0);
-  vec3 rd = GetRayDir(uv, ro, iDirection, 1.);
+  vec3 ro = iPosition*0.05 - vec3(0.0, 0.0, 3.0);
+  vec3 rd = GetRayDir(uv, ro, iDirection, 1.+iSliders.x*0.005);
 
   vec3 col = vec3(0.4, 0.4, 0.9) * (1.0 - rd.y);
 

@@ -202,17 +202,18 @@ func main() {
 	cameraPosition := vec3{0, 0, 0}
 	cameraPositionFixed := cameraPosition
 	cameraDirection := vec3{0, 0, 1}
+	upDirection := vec3{0, 1, 0}
 	u := vec3{1, 0, 0}
-	v := vec3{0, 1, 0}
-	upDirection := v
-	movementSpeed := float32(0.05)
+	// v := upDirection
 	clampedCameraPitch := startCameraPitch
+	sliderx, slidery, sliderz, sliderw := float32(0), float32(0), float32(0), float32(0)
 
 	iTimeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iTime\x00"))
+	iResolutionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iResolution\x00"))
 	iPositionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPosition\x00"))
 	iPositionFixedLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPositionFixed\x00"))
 	iDirectionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iDirection\x00"))
-	iResolutionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iResolution\x00"))
+	iSlidersLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iSliders\x00"))
 
 	for !window.ShouldClose() {
 		gl.BindFramebuffer(gl.FRAMEBUFFER, fbo)
@@ -241,37 +242,62 @@ func main() {
 			movementScale = 0.2
 		}
 		if window.GetKey(glfw.KeyW) == glfw.Press {
-			movement = movement.add(cameraDirection.scale(movementSpeed * 1.5))
-			movementFixed = movementFixed.add(vec3{0, 0, movementSpeed * 1.5})
+			movement = movement.add(cameraDirection.scale(1.5))
+			movementFixed = movementFixed.add(vec3{0, 0, 1.5})
 		}
 		if window.GetKey(glfw.KeyS) == glfw.Press {
-			movement = movement.add(cameraDirection.scale(-movementSpeed))
-			movementFixed = movementFixed.add(vec3{0, 0, -movementSpeed})
+			movement = movement.add(cameraDirection.scale(-1))
+			movementFixed = movementFixed.add(vec3{0, 0, -1})
 		}
 		if window.GetKey(glfw.KeyA) == glfw.Press {
-			movement = movement.add(u.scale(-movementSpeed))
-			movementFixed = movementFixed.add(vec3{-movementSpeed, 0, 0})
+			movement = movement.add(u.scale(-1))
+			movementFixed = movementFixed.add(vec3{-1, 0, 0})
 		}
 		if window.GetKey(glfw.KeyD) == glfw.Press {
-			movement = movement.add(u.scale(movementSpeed))
-			movementFixed = movementFixed.add(vec3{movementSpeed, 0, 0})
+			movement = movement.add(u.scale(1))
+			movementFixed = movementFixed.add(vec3{1, 0, 0})
+		}
+		if window.GetKey(glfw.KeySpace) == glfw.Press {
+			movement = movement.add(upDirection.scale(1))
+			movementFixed = movementFixed.add(vec3{0, 1, 0})
+		}
+		if window.GetKey(glfw.KeyLeftShift) == glfw.Press {
+			movement = movement.add(upDirection.scale(-1))
+			movementFixed = movementFixed.add(vec3{0, -1, 0})
 		}
 		if window.GetKey(glfw.KeyQ) == glfw.Press {
-			movement = movement.add(upDirection.scale(movementSpeed))
-			movementFixed = movementFixed.add(vec3{0, movementSpeed, 0})
+			sliderx--
 		}
 		if window.GetKey(glfw.KeyE) == glfw.Press {
-			movement = movement.add(upDirection.scale(-movementSpeed))
-			movementFixed = movementFixed.add(vec3{0, -movementSpeed, 0})
+			sliderx++
+		}
+		if window.GetKey(glfw.KeyDown) == glfw.Press {
+			slidery--
+		}
+		if window.GetKey(glfw.KeyUp) == glfw.Press {
+			slidery++
+		}
+		if window.GetKey(glfw.KeyLeft) == glfw.Press {
+			sliderz--
+		}
+		if window.GetKey(glfw.KeyRight) == glfw.Press {
+			sliderz++
+		}
+		if window.GetKey(glfw.KeyPageDown) == glfw.Press {
+			sliderw--
+		}
+		if window.GetKey(glfw.KeyPageUp) == glfw.Press {
+			sliderw++
 		}
 		cameraPosition = cameraPosition.add(movement.scale(movementScale))
 		cameraPositionFixed = cameraPositionFixed.add(movementFixed.scale(movementScale))
 
 		gl.Uniform1f(iTimeLoc, float32(time.Since(start).Seconds()))
+		gl.Uniform2f(iResolutionLoc, float32(renderWidth), float32(renderHeight))
 		gl.Uniform3f(iPositionLoc, cameraPosition.x, cameraPosition.y, cameraPosition.z)
 		gl.Uniform3f(iPositionFixedLoc, cameraPositionFixed.x, cameraPositionFixed.y, cameraPositionFixed.z)
 		gl.Uniform3f(iDirectionLoc, cameraDirection.x, cameraDirection.y, cameraDirection.z)
-		gl.Uniform2f(iResolutionLoc, float32(renderWidth), float32(renderHeight))
+		gl.Uniform4f(iSlidersLoc, sliderx, slidery, sliderz, sliderw)
 
 		gl.BindVertexArray(renderVAO)
 		gl.DrawArrays(gl.TRIANGLE_STRIP, 0, 4)

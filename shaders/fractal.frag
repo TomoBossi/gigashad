@@ -7,6 +7,7 @@ uniform vec2 iResolution;
 uniform vec3 iPosition;
 uniform vec3 iPositionFixed;
 uniform vec3 iDirection;
+uniform vec4 iSliders;
 
 vec3 CSize;
 vec4 eStack[2];
@@ -160,14 +161,14 @@ void main() {
 
   CSize = vec3(1., 1., 1.3);
 
-  vec3 cameraPos = iPosition + vec3(-13.0, 3, 2.5);
+  vec3 cameraPos = iPosition*0.05 + vec3(-13.0, 3, 2.5);
   mat3 camMat = lookAt(cameraPos, cameraPos + iDirection);
   vec2 mou = vec2(0, 0);
   mat3 mZ = RotationMatrix(vec3(.0, .0, 1.0), 0.);
   mat3 mX = RotationMatrix(vec3(1.0, .0, .0), mou.y);
   mat3 mY = RotationMatrix(vec3(.0, 1.0, 0.0), -mou.x);
   mX = mY * mX * mZ;
-  vec3 dir = vec3(uv.x, uv.y, 1.2);
+  vec3 dir = vec3(uv.x, uv.y, 1.2+iSliders.x*0.005);
   dir = camMat * normalize(dir);
 
   vec3 col = vec3(.0);
