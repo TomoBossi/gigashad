@@ -5,6 +5,7 @@ out vec4 fragColor;
 uniform float iTime;
 uniform vec2 iResolution;
 uniform vec3 iPosition;
+uniform vec3 iPositionFixed;
 uniform vec3 iDirection;
 
 float smin(float a, float b, float k) {
@@ -12,10 +13,9 @@ float smin(float a, float b, float k) {
   return min(a, b) - h*h*h*k*(1.0/6.0);
 }
 
-float sdVerticalCapsule( vec3 p, float h, float r )
-{
-  p.x -= clamp( p.x, -h / 2.0, h / 2.0 );
-  return length( p ) - r;
+float sdVerticalCapsule(vec3 p, float h, float r) {
+  p.x -= clamp(p.x, -h / 2.0, h / 2.0);
+  return length(p) - r;
 }
 
 mat2 Rot(float a) {
@@ -23,71 +23,70 @@ mat2 Rot(float a) {
   return mat2(c, -s, s, c);
 }
 
-vec2 sdStick(vec3 p, vec3 a, vec3 b, float r1, float r2)
-{
+vec2 sdStick(vec3 p, vec3 a, vec3 b, float r1, float r2) {
   vec3 pa = p-a, ba = b-a;
-	float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
-	return vec2( length( pa - ba*h ) - mix(r1,r2,h*h*(3.0-2.0*h)), h );
+	float h = clamp(dot(pa,ba)/dot(ba,ba), 0.0, 1.0);
+	return vec2(length(pa - ba*h) - mix(r1,r2,h*h*(3.0-2.0*h)), h);
 }
 
-float sdBox( vec3 p, vec3 b )
-{
+float sdBox(vec3 p, vec3 b) {
   vec3 q = abs(p) - b;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0);
 }
 
-vec3 opCheapBend( in vec3 p, float k )
-{
+vec3 opCheapBend(in vec3 p, float k) {
   float c = cos(k*p.x);
   float s = sin(k*p.x);
-  mat2  m = mat2(c,-s,s,c);
+  mat2 m = mat2(c,-s,s,c);
   return vec3(m*p.xy,p.z);
 }
 
-float sdEllipsoid( in vec3 p, in vec3 r ) 
-{
+float sdEllipsoid(in vec3 p, in vec3 r) {
   float k0 = length(p/r);
   float k1 = length(p/(r*r));
   return k0*(k0-1.0)/k1;
 }
 
-float sdCappedCylinder( vec3 p, float h, float r )
-{
+float sdCappedCylinder(vec3 p, float h, float r) {
   vec2 d = abs(vec2(length(p.xz),p.y)) - vec2(h,r);
   return min(max(d.x,d.y),0.0) + length(max(d,0.0));
 }
 
-float dot2( in vec2 v ) { return dot(v,v); }
-float dot2( in vec3 v ) { return dot(v,v); }
-float ndot( in vec2 a, in vec2 b ) { return a.x*b.x - a.y*b.y; }
+float dot2(in vec2 v) {
+  return dot(v,v); 
+}
 
-float sdSphere( vec3 p, float s )
-{
+float dot2(in vec3 v) {
+  return dot(v,v);
+}
+
+float ndot(in vec2 a, in vec2 b) {
+  return a.x*b.x - a.y*b.y;
+}
+
+float sdSphere(vec3 p, float s) {
   return length(p)-s;
 }
 
-float sdTorus( vec3 p, vec2 t )
-{
+float sdTorus(vec3 p, vec2 t) {
   vec2 q = vec2(length(p.xz)-t.x,p.y);
   return length(q)-t.y;
 }
 
-float sdRoundCone( vec3 p, float r1, float r2, float h )
-{
+float sdRoundCone(vec3 p, float r1, float r2, float h) {
   vec2 q = vec2( length(p.xz), p.y );
     
   float b = (r1-r2)/h;
   float a = sqrt(1.0-b*b);
   float k = dot(q,vec2(-b,a));
     
-  if( k < 0.0 ) return length(q) - r1;
-  if( k > a*h ) return length(q-vec2(0.0,h)) - r2;
+  if (k < 0.0) return length(q) - r1;
+  if (k > a*h) return length(q-vec2(0.0,h)) - r2;
         
   return dot(q, vec2(a,b) ) - r1;
 }
 
-float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2)
-{
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2) {
   vec3  ba = b - a;
   float l2 = dot(ba,ba);
   float rr = r1 - r2;
@@ -102,8 +101,8 @@ float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2)
   float z2 = z*z*l2;
 
   float k = sign(rr)*rr*rr*x2;
-  if( sign(z)*a2*z2 > k ) return  sqrt(x2 + z2)        *il2 - r2;
-  if( sign(y)*a2*y2 < k ) return  sqrt(x2 + y2)        *il2 - r1;
+  if (sign(z)*a2*z2 > k) return  sqrt(x2 + z2)        *il2 - r2;
+  if (sign(y)*a2*y2 < k) return  sqrt(x2 + y2)        *il2 - r1;
                           return (sqrt(x2*a2*il2)+y*rr)*il2 - r1;
 }
 
@@ -237,23 +236,20 @@ vec3 GetRayDir(vec2 uv, vec3 p, vec3 f, float z) {
   return d;
 }
 
-float calcOcclusion( in vec3 pos, in vec3 nor )
-{
+float calcOcclusion(in vec3 pos, in vec3 nor) {
 	float occ = 0.0;
   float sca = 1.0;
-  for( int i=0; i<5; i++ )
-  {
+  for (int i=0; i<5; i++) {
     float h = 0.01 + 0.11*float(i)/4.0;
     vec3 opos = pos + h*nor;
     float d = GetDist( opos );
     occ += (h-d)*sca;
     sca *= 0.95;
   }
-  return clamp( 1.0 - 2.0*occ, 0.0, 1.0 );
+  return clamp(1.0 - 2.0*occ, 0.0, 1.0);
 }
 
-float calcSoftshadow( in vec3 ro, in vec3 rd )
-{
+float calcSoftshadow(in vec3 ro, in vec3 rd) {
   float mint = .001;
   float tmax = 100.;
   int technique =1;
@@ -261,33 +257,25 @@ float calcSoftshadow( in vec3 ro, in vec3 rd )
   float t = mint;
   float ph = 1e10;
 
-  for( int i=0; i<32; i++ )
-  {
-    float h = GetDist( ro + rd*t );
+  for (int i=0; i<32; i++) {
+    float h = GetDist(ro + rd*t);
 
-    if( technique==0 )
-    {
-      res = min( res, 10.0*h/t );
-    }
-    else
-    {
-
+    if (technique==0) {
+      res = min(res, 10.0*h/t);
+    } else {
       float y = h*h/(2.0*ph);
       float d = sqrt(h*h-y*y);
-      res = min( res, 10.0*d/max(0.0,t-y) );
+      res = min(res, 10.0*d/max(0.0,t-y));
       ph = h;
     }
     
     t += h;
-    
-    if( res<0.0001 || t>tmax ) break;
-      
+    if (res<0.0001 || t>tmax) break;
   }
-  return clamp( res, 0.0, 1.0 );
+  return clamp(res, 0.0, 1.0);
 }
 
-void main()
-{
+void main() {
   vec2 uv = (gl_FragCoord.xy-.5*iResolution.xy)/iResolution.y;
   
   vec3 ro = iPosition - vec3(0.0, 0.0, 5.0);

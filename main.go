@@ -200,6 +200,7 @@ func main() {
 
 	start := time.Now()
 	cameraPosition := vec3{0, 0, 0}
+	cameraPositionFixed := cameraPosition
 	cameraDirection := vec3{0, 0, 1}
 	u := vec3{1, 0, 0}
 	v := vec3{0, 1, 0}
@@ -209,6 +210,7 @@ func main() {
 
 	iTimeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iTime\x00"))
 	iPositionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPosition\x00"))
+	iPositionFixedLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPositionFixed\x00"))
 	iDirectionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iDirection\x00"))
 	iResolutionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iResolution\x00"))
 
@@ -227,38 +229,47 @@ func main() {
 		tempClampedCameraPitch := math.Max(0.001, math.Min(math.Pi-0.001, clampedCameraPitch+cameraPitchDelta))
 		cameraDirection = cameraDirection.rotateAroundAxis(u, float32(tempClampedCameraPitch-clampedCameraPitch)).rotateAroundAxis(upDirection, float32(cameraYawDelta))
 		u = upDirection.cross(cameraDirection).normalize()
-		v = cameraDirection.cross(u)
+		// v = cameraDirection.cross(u)
 		clampedCameraPitch = tempClampedCameraPitch
 		cameraPitchDelta, cameraYawDelta = 0, 0
 
 		// Movement
 		movement := vec3{0, 0, 0}
+		movementFixed := movement
 		movementScale := float32(1.0)
 		if window.GetKey(glfw.KeyLeftControl) == glfw.Press {
 			movementScale = 0.2
 		}
 		if window.GetKey(glfw.KeyW) == glfw.Press {
 			movement = movement.add(cameraDirection.scale(movementSpeed * 1.5))
+			movementFixed = movementFixed.add(vec3{0, 0, movementSpeed * 1.5})
 		}
 		if window.GetKey(glfw.KeyS) == glfw.Press {
 			movement = movement.add(cameraDirection.scale(-movementSpeed))
+			movementFixed = movementFixed.add(vec3{0, 0, -movementSpeed})
 		}
 		if window.GetKey(glfw.KeyA) == glfw.Press {
 			movement = movement.add(u.scale(-movementSpeed))
+			movementFixed = movementFixed.add(vec3{-movementSpeed, 0, 0})
 		}
 		if window.GetKey(glfw.KeyD) == glfw.Press {
 			movement = movement.add(u.scale(movementSpeed))
+			movementFixed = movementFixed.add(vec3{movementSpeed, 0, 0})
 		}
 		if window.GetKey(glfw.KeyQ) == glfw.Press {
-			movement = movement.add(v.scale(movementSpeed))
+			movement = movement.add(upDirection.scale(movementSpeed))
+			movementFixed = movementFixed.add(vec3{0, movementSpeed, 0})
 		}
 		if window.GetKey(glfw.KeyE) == glfw.Press {
-			movement = movement.add(v.scale(-movementSpeed))
+			movement = movement.add(upDirection.scale(-movementSpeed))
+			movementFixed = movementFixed.add(vec3{0, -movementSpeed, 0})
 		}
 		cameraPosition = cameraPosition.add(movement.scale(movementScale))
+		cameraPositionFixed = cameraPositionFixed.add(movementFixed.scale(movementScale))
 
 		gl.Uniform1f(iTimeLoc, float32(time.Since(start).Seconds()))
 		gl.Uniform3f(iPositionLoc, cameraPosition.x, cameraPosition.y, cameraPosition.z)
+		gl.Uniform3f(iPositionFixedLoc, cameraPositionFixed.x, cameraPositionFixed.y, cameraPositionFixed.z)
 		gl.Uniform3f(iDirectionLoc, cameraDirection.x, cameraDirection.y, cameraDirection.z)
 		gl.Uniform2f(iResolutionLoc, float32(renderWidth), float32(renderHeight))
 
