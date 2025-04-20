@@ -1,4 +1,4 @@
-module shaders
+module gigashad
 
 go 1.24.0
 
