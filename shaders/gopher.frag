@@ -130,7 +130,12 @@ float sdFoot(vec3 p) {
   return min(dFoot1, dFoot2);
 }
 
+vec3 repeat(vec3 p, float spacing) {
+  return mod(p + 0.5 * spacing, spacing) - 0.5 * spacing;
+}
+
 vec2 GetDistMat(vec3 p) {
+  p = repeat(p, 5.0);
   float m=0.0;
   float alpha = sin(iTime) / 10.0;
   float alphab = sin(iTime - 1.0) / 10.0;
@@ -174,7 +179,7 @@ vec2 GetDistMat(vec3 p) {
   pFoot = pFoot - vec3(-0.25, -0.95, 0.25);
   float dFoot = sdFoot(pFoot);
   
-  float d = min(dbodyhead, dgrnd);
+  float d = dbodyhead; // min(dbodyhead, dgrnd);
   d = min(d, deyeW);
   d = min(d, deyeB);
   d = min(d, dhear);
@@ -186,7 +191,7 @@ vec2 GetDistMat(vec3 p) {
   
   if ( deyeW == d )  m = 1.0;
   if ( deyeB == d )  m = 3.0;
-  if ( dgrnd == d ) m = 2.0;
+  // if ( dgrnd == d ) m = 2.0;
   if ( dbodyhead == d ) m = 4.0;
   if ( dhear == d ) m = 4.0;
   if ( dNose == d ) m = 5.0;
@@ -199,6 +204,7 @@ vec2 GetDistMat(vec3 p) {
 }
 
 float GetDist(vec3 p) {
+  p = repeat(p, 5.0);
   return GetDistMat(p).x;
 }
 
@@ -275,14 +281,19 @@ float calcSoftshadow(in vec3 ro, in vec3 rd) {
   return clamp(res, 0.0, 1.0);
 }
 
+vec3 applyFog(vec3 color, float dist, vec3 fogColor, float density) {
+    float fogAmount = 1.0 - exp(-dist * density);
+    return mix(color, fogColor, clamp(fogAmount, 0.0, 1.0));
+}
+
 void main() {
   vec2 uv = (gl_FragCoord.xy-.5*iResolution.xy)/iResolution.y;
   
-  vec3 ro = iPosition - vec3(0.0, 0.0, 5.0);
+  vec3 ro = iPosition - vec3(0.0, 0.0, 3.0);
   vec3 rd = GetRayDir(uv, ro, iDirection, 1.);
 
   vec3 col = vec3(0.4, 0.4, 0.9) * (1.0 - rd.y);
-  
+
   float d = RayMarch(ro, rd);
   
   if(d<100.) {
@@ -307,7 +318,7 @@ void main() {
     float sky = clamp( 0.5 + 0.5*n.y, 0.0, 1.0 );
     float ind = clamp( dot( n, normalize(sunDir*vec3(-1.0,0.0,-1.0)) ), 0.0, 1.0 );
 
-    vec3 lin  = sun*vec3(1.64,1.27,0.99)*pow(vec3(sha),vec3(1.0,1.2,1.5));
+    vec3 lin  = sun*vec3(1.64,1.27,0.99); // *pow(vec3(sha),vec3(1.0,1.2,1.5));
     lin += sky*vec3(0.16,0.20,0.28)*occ;
     lin += ind*vec3(0.40,0.28,0.20)*occ;
 
@@ -315,5 +326,6 @@ void main() {
   }
   
   col = pow(col, vec3(.4545));
+  col = applyFog(col, d*0.1, vec3(0.95, 0.95, 1.0), 0.25); 
   fragColor = vec4(col, 1.0);
 }
