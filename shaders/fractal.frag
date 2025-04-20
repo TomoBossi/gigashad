@@ -19,6 +19,13 @@ vec2 rotationStore = vec2(1., 0.);
 vec2 mouseStore = vec2(2., 0.);
 vec3 sunLight = vec3(0.4, 0.4, 0.3);
 
+float MapReal2Positive(float value) {
+  if (value <= 0) return 1.0 - exp(value);
+  return 1. + value;
+}
+
+float lod = MapReal2Positive(iSliders.y);
+
 float Hash(vec2 p){
   vec3 p3 = fract(vec3(p.xyx) * vec3(.1031, .11369, .13787));
   p3 += dot(p3, p3.yzx + 19.19);
@@ -142,7 +149,7 @@ vec3 PostEffects(vec3 rgb, vec2 xy) {
 }
 
 vec3 Albedo(vec3 pos, vec3 nor) {
-  return iDirection/10 + pos.yzx/10*(1+0.5*sin(0.5*iTime))*Colour(pos.yzx);
+  return iDirection/10 + normalize(pos.yzx)/10*Colour(pos.yzx);
 }
 
 mat3 lookAt(vec3 camPos, vec3 target) {
