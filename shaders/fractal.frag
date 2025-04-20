@@ -55,7 +55,6 @@ float Map(vec3 p) {
   float scale = 1.;
   for (int i = 0; i < 12; i++) {
     p = 2.0 * clamp(p, -CSize, CSize) - p;
-    //float r2 = dot(p, p);
     float r2 = dot(p,p+sin(p.z*.3*(0.5+0.5*sin(iTime))));
     float k = max((2.) / (r2), .027);
     p *= k;
@@ -142,7 +141,7 @@ vec3 PostEffects(vec3 rgb, vec2 xy) {
 }
 
 vec3 Albedo(vec3 pos, vec3 nor) {
-  return vec3(0, 0, 0)*Colour(pos);
+  return iDirection/10 + pos.yzx/10*(1+0.5*sin(0.5*iTime))*Colour(pos.yzx);
 }
 
 mat3 lookAt(vec3 camPos, vec3 target) {
