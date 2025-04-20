@@ -55,17 +55,17 @@ float Map(vec3 p) {
   float scale = 1.;
   for (int i = 0; i < 12; i++) {
     p = 2.0 * clamp(p, -CSize, CSize) - p;
-    float r2 = dot(p, p);
-    //float r2 = dot(p,p+sin(p.z*.3));
+    //float r2 = dot(p, p);
+    float r2 = dot(p,p+sin(p.z*.3*(0.5+0.5*sin(iTime))));
     float k = max((2.) / (r2), .027);
     p *= k;
     scale *= k;
   }
   float l = length(p.xy);
-  float rxy = l - 4.0;
+  float rxy = l - 1.2 + (0.2*sin(iTime));
   float n = l * p.z;
   rxy = max(rxy, -(n) / 4.);
-  return (rxy) / abs(scale);
+  return rxy / abs(scale);
 }
 
 float Shadow(in vec3 ro, in vec3 rd) {
@@ -161,7 +161,7 @@ void main() {
 
   CSize = vec3(1., 1., 1.3);
 
-  vec3 cameraPos = iPosition + vec3(-13.0, -1.2, 2.5);
+  vec3 cameraPos = iPosition + vec3(-13.0, 3, 2.5);
   mat3 camMat = lookAt(cameraPos, cameraPos + iDirection);
   vec2 mou = vec2(0, 0);
   mat3 mZ = RotationMatrix(vec3(.0, .0, 1.0), 0.);
