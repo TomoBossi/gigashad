@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chewxy/math32"
 	"github.com/go-gl/gl/v4.6-core/gl"
 	"github.com/go-gl/glfw/v3.3/glfw"
 )
@@ -199,6 +200,7 @@ func main() {
 	gl.BindFramebuffer(gl.FRAMEBUFFER, 0)
 
 	start := time.Now()
+	speed := float32(1)
 	cameraPosition := vec3{0, 0, 0}
 	cameraPositionFixed := cameraPosition
 	cameraDirection := vec3{0, 0, 1}
@@ -209,6 +211,7 @@ func main() {
 	sliderx, slidery, sliderz, sliderw := float32(0), float32(0), float32(0), float32(0)
 
 	iTimeLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iTime\x00"))
+	iSpeedLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iSpeed\x00"))
 	iResolutionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iResolution\x00"))
 	iPositionLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPosition\x00"))
 	iPositionFixedLoc := gl.GetUniformLocation(shaderProgram, gl.Str("iPositionFixed\x00"))
@@ -266,9 +269,15 @@ func main() {
 			movementFixed = movementFixed.add(vec3{0, -1, 0})
 		}
 		if window.GetKey(glfw.KeyQ) == glfw.Press {
-			sliderx--
+			speed -= 0.01
 		}
 		if window.GetKey(glfw.KeyE) == glfw.Press {
+			speed += 0.01
+		}
+		if window.GetKey(glfw.KeyKPSubtract) == glfw.Press {
+			sliderx--
+		}
+		if window.GetKey(glfw.KeyKPAdd) == glfw.Press {
 			sliderx++
 		}
 		if window.GetKey(glfw.KeyDown) == glfw.Press {
@@ -289,10 +298,11 @@ func main() {
 		if window.GetKey(glfw.KeyPageUp) == glfw.Press {
 			sliderw++
 		}
-		cameraPosition = cameraPosition.add(movement.scale(movementScale))
-		cameraPositionFixed = cameraPositionFixed.add(movementFixed.scale(movementScale))
+		cameraPosition = cameraPosition.add(movement.scale(movementScale * math32.Exp(speed-1)))
+		cameraPositionFixed = cameraPositionFixed.add(movementFixed.scale(movementScale * math32.Exp(speed-1)))
 
 		gl.Uniform1f(iTimeLoc, float32(time.Since(start).Seconds()))
+		gl.Uniform1f(iSpeedLoc, math32.Exp(speed-1))
 		gl.Uniform2f(iResolutionLoc, float32(renderWidth), float32(renderHeight))
 		gl.Uniform3f(iPositionLoc, cameraPosition.x, cameraPosition.y, cameraPosition.z)
 		gl.Uniform3f(iPositionFixedLoc, cameraPositionFixed.x, cameraPositionFixed.y, cameraPositionFixed.z)
