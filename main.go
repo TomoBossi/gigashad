@@ -13,8 +13,7 @@ import (
 	"gigashad/shaders/plasma"
 )
 
-// Each shader is a shad.Shader (CPU), a shad.GPUShader, or both.
-var shaders = map[string]func() any{
+var shaders = map[string]func() shad.Def{
 	"oolacile": oolacile.New,
 	"plasma":   plasma.New,
 }
@@ -48,16 +47,11 @@ func main() {
 	if *width < 0 || *fps <= 0 {
 		fail("-width must be 0 or positive, -fps positive")
 	}
-	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.CPU, "gpu": shad.GPU}[*backend]
+	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.OnCPU, "gpu": shad.OnGPU}[*backend]
 	if !ok {
 		fail("-backend must be auto, cpu or gpu")
 	}
-	s := mk()
-	if *shot != "" && !shad.StartsOnGPU(s, be) {
-		cpuShader, ok := s.(shad.Shader)
-		if !ok {
-			fail("this shader has no CPU version")
-		}
+	if *shot != "" && !shad.StartsOnGPU(new(mk()), be) {
 		w := *width
 		if w == 0 {
 			w = shad.DefaultCPUWidth
@@ -66,7 +60,7 @@ func main() {
 			ratio = 16.0 / 10 // no window to follow
 		}
 		h := max(1, int(float64(w)/ratio+0.5))
-		took, err := shad.Shot(cpuShader, w, h, *shotTime, *shot)
+		took, err := shad.Shot(new(mk()), w, h, *shotTime, *shot)
 		if err != nil {
 			fail("%v", err)
 		}
@@ -74,7 +68,7 @@ func main() {
 		return
 	}
 
-	app, err := shad.NewApp(s, shad.Options{
+	app, err := shad.NewApp(new(mk()), shad.Options{
 		Width: *width, Aspect: ratio, Backend: be,
 		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
 		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,

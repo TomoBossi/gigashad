@@ -19,8 +19,9 @@ type Player struct {
 	OnGround bool
 }
 
-// Input is one frame of player intent, already read from the keyboard/mouse.
-type Input struct {
+// Intent is one frame of what the player wants to do, already read from the
+// input (see Flyer).
+type Intent struct {
 	Move       Vec3 // x right, y up, z forward; each in [-1, 1]
 	Yaw, Pitch float64
 	Roll       float64 // radians this frame, positive clockwise
@@ -76,7 +77,7 @@ func (p *Player) Look(yaw, pitch, roll float64) {
 }
 
 // Step advances the player by dt seconds. field may be nil.
-func (p *Player) Step(in Input, field Field, dt float64) {
+func (p *Player) Step(in Intent, field Field, dt float64) {
 	p.Look(in.Yaw, in.Pitch, in.Roll)
 	if in.Grow != 0 {
 		p.grow(in.Grow*dt, field)

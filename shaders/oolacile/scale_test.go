@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"gigashad/fractal"
 	"gigashad/shad"
 )
 
@@ -17,8 +16,8 @@ import (
 // a frame costs about the same at every scale. Set GIGASHAD_SHOTS to a
 // directory to also save the frames.
 func TestScaleInvariance(t *testing.T) {
-	e := New().(*fractal.Explorer)
-	p := e.Spawn()
+	e := newExplorer()
+	p := startPlayer()
 	target, ok := shad.Raycast(e, p.Pos, p.Fwd, 10, 1e-12)
 	if !ok {
 		t.Fatal("spawn view hits nothing")
@@ -30,7 +29,7 @@ func TestScaleInvariance(t *testing.T) {
 	for i := range 8 {
 		p.Scale = 2e-3 * math.Pow(10, -float64(i))
 		p.Pos = hit.Sub(p.Fwd.Mul(40 * p.Scale))
-		f := &shad.Frame{Player: &p, Cam: p.Camera()}
+		f := &shad.Frame{Cam: p.Camera()}
 		t0 := time.Now()
 		r.Render(e, f)
 		took := time.Since(t0)

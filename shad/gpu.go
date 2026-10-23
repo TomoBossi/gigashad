@@ -8,55 +8,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
-// GPUShader is implemented by shaders that can also, or only, run on the GPU
-// as a Kage program (ebiten's Go-like shading language, compiled to Metal on
-// macOS). A shader may implement Shader, GPUShader, or both.
-//
-// On the GPU everything is 32-bit float and nothing comes back: there is no
-// G-buffer (Frame.Prev stays nil). A Field, if the shader has one, is still
-// queried on the CPU, so a shader that renders on the GPU and collides on the
-// CPU must keep both versions in agreement.
-type GPUShader interface {
-	// Kage returns the program body, without the package clause, defining
-	//
-	//	func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4
-	//
-	// on top of KagePrelude. nil means the shader has no GPU version.
-	Kage() []byte
-}
-
-// GPUUniforms is implemented by GPU shaders with uniforms of their own, on top
-// of the ones KagePrelude declares. Values must be float32, int, or []float32.
-type GPUUniforms interface {
-	Uniforms(f *Frame, u map[string]any)
-}
-
-// GPUPreferrer is implemented by shaders with both versions that want the GPU
-// for some frames. Without it, a shader with both runs on the CPU. It is asked
-// every frame, so a shader can switch back to the CPU when it needs the
-// precision (see fractal.Explorer).
-type GPUPreferrer interface {
-	PreferGPU(f *Frame) bool
-}
-
-// GPUVariants is implemented by GPU shaders that compile to more than one
-// program and pick one per frame, e.g. a fast one and a precise one (see the
-// double-float helpers in KagePrelude). Variants are compiled once, at start.
-type GPUVariants interface {
-	// KageVariants returns the program bodies, as Kage would.
-	KageVariants() [][]byte
-	// Variant returns the index of the program to render f with.
-	Variant(f *Frame) int
-}
-
-// GPUHandoff is implemented by shaders that will switch from the GPU to the
-// CPU (see GPUPreferrer) and want the jump in resolution eased: Handoff
-// returns 1 while far from switching, falling to 0 at the switch, and the
-// GPU's resolution is brought down toward the CPU's as it falls.
-type GPUHandoff interface {
-	Handoff(f *Frame) float64
-}
-
 // KagePrelude starts every GPU program: pixel units, the uniforms every frame
 // fills in, and helpers matching their CPU counterparts.
 const KagePrelude = `//kage:unit pixels
@@ -92,11 +43,8 @@ func camRay(frag vec2) vec3 {
 
 // Double-float arithmetic: a value is a vec2 (hi, lo) of two floats with
 // |lo| <= half an ulp of hi, about 48 bits of precision. It only works in
-// shaders that declare
-//
-//	var PreciseMath float
-//
-// without which Metal's fast math optimises the error terms away.
+// Precise variants (see Kage): elsewhere Metal's fast math folds the error
+// terms away, and the helpers cost about as much as plain float.
 
 func dfQuickTwoSum(a, b float) vec2 {
 	s := a + b
@@ -162,29 +110,31 @@ func dfAdd3(ah, al, bh, bl vec3) (vec3, vec3) {
 }
 `
 
-// gpuRenderer draws a GPUShader into an image.
+// gpuRenderer draws a GPU program into an image.
 type gpuRenderer struct {
+	def      *GPU
 	shaders  []*ebiten.Shader
-	variants GPUVariants
 	img      *ebiten.Image
 	uniforms map[string]any
-	extra    GPUUniforms
 }
 
-func newGPURenderer(s GPUShader) (*gpuRenderer, error) {
-	srcs := [][]byte{s.Kage()}
-	g := &gpuRenderer{uniforms: map[string]any{}}
-	if v, ok := s.(GPUVariants); ok {
-		srcs = v.KageVariants()
-		g.variants = v
+// preciseDecl opts a program out of Metal's fast math: the patched ebiten in
+// third_party compiles programs declaring this uniform without it.
+const preciseDecl = "\nvar PreciseMath float\n"
+
+func newGPURenderer(def *GPU) (*gpuRenderer, error) {
+	if def == nil || len(def.Variants) == 0 {
+		return nil, fmt.Errorf("shader has no GPU version")
 	}
-	for i, src := range srcs {
-		if src == nil {
-			return nil, fmt.Errorf("shader has no GPU version")
+	g := &gpuRenderer{def: def, uniforms: map[string]any{}}
+	for i, v := range def.Variants {
+		src := []byte(KagePrelude)
+		if v.Precise {
+			src = append(src, preciseDecl...)
 		}
-		sh, err := ebiten.NewShader(append([]byte(KagePrelude), src...))
+		sh, err := ebiten.NewShader(append(src, v.Source...))
 		if err != nil {
-			return nil, fmt.Errorf("compiling GPU shader (variant %d): %w", i, err)
+			return nil, fmt.Errorf("compiling GPU variant %d: %w", i, err)
 		}
 		g.shaders = append(g.shaders, sh)
 	}
@@ -195,7 +145,6 @@ func newGPURenderer(s GPUShader) (*gpuRenderer, error) {
 	for _, sh := range g.shaders {
 		warm.DrawRectShader(1, 1, sh, nil)
 	}
-	g.extra, _ = s.(GPUUniforms)
 	return g, nil
 }
 
@@ -236,12 +185,12 @@ func (g *gpuRenderer) render(f *Frame) {
 	u["CamFwd"] = Vec3f(c.Fwd)
 	u["CamFovY"] = float32(c.FovY)
 	u["CamScale"] = float32(c.Scale)
-	if g.extra != nil {
-		g.extra.Uniforms(f, u)
+	if g.def.Uniforms != nil {
+		g.def.Uniforms(f, u)
 	}
 	sh := g.shaders[0]
-	if g.variants != nil {
-		sh = g.shaders[max(0, min(len(g.shaders)-1, g.variants.Variant(f)))]
+	if g.def.Variant != nil {
+		sh = g.shaders[max(0, min(len(g.shaders)-1, g.def.Variant(f)))]
 	}
 	g.img.DrawRectShader(w, h, sh, &ebiten.DrawRectShaderOptions{Uniforms: u})
 }

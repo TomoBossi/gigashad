@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"math"
 
+	"github.com/hajimehoshi/ebiten/v2"
+
 	"gigashad/fractal"
 	"gigashad/shad"
 )
@@ -18,10 +20,47 @@ var (
 //go:embed scene.kage
 var kage []byte
 
-func New() any {
-	f := NeoOolacile()
+// scene is the shader's state: the explorer, the player, and its own clock.
+type scene struct {
+	e   *fractal.Explorer
+	fly shad.Flyer
+	t0  float64 // Frame.Time at the last reset
+}
+
+func New() shad.Def {
+	s := &scene{e: newExplorer()}
+	s.fly.Keys = keys()
+	s.reset(0)
+	d := s.e.Def()
+	d.Update = s.update
+	d.Data = s.fly.Data
+	d.Bindings = append(shad.StandardBindings(), shad.Binding{
+		Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
+		Action: func(c *shad.Context) { s.reset(c.Frame.Time) },
+	})
+	return d
+}
+
+// keys: WASD, Space/Cmd up/down, Shift fast, mouse and arrows to look, Q/E
+// roll, Z/C shrink/grow.
+func keys() shad.FlyKeys {
+	k := shad.DefaultFlyKeys()
+	k.Down = ebiten.KeyMeta
+	return k
+}
+
+func (s *scene) reset(now float64) {
+	s.fly.Player = startPlayer()
+	s.t0 = now
+}
+
+func (s *scene) update(c *shad.Context) {
+	s.fly.Update(c)
+}
+
+func newExplorer() *fractal.Explorer {
 	e := &fractal.Explorer{
-		F:        f,
+		F:        NeoOolacile(),
 		Detail:   0.002,
 		ViewDist: 600,
 		Steps:    160,
@@ -41,12 +80,16 @@ func New() any {
 	e.Background = func(dir shad.Vec3, glow float64, fr *shad.Frame) shad.Vec3 {
 		return e.Fog.Add(shad.V3(0.1, 0.6, 0.7).Mul(glow * glow * 0.6))
 	}
+	return e
+}
+
+// startPlayer is the view stored in the original scene file.
+func startPlayer() shad.Player {
 	p := shad.DefaultPlayer()
 	p.Pos, p.Fwd, p.Up = startPos, startFwd, startUp
 	p.Scale = 0.002
 	p.FovY = 60 * math.Pi / 180
-	e.Start = p
-	return e
+	return p
 }
 
 var (

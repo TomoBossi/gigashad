@@ -19,10 +19,10 @@ import (
 // de gets the hit threshold eps so it can do in double-float only as many
 // iterations as that much detail needs, and the rest in plain float.
 //
-// The explorer compiles two variants: a precise one, which declares
-// PreciseMath so the double-float arithmetic works, and a fast one, which
-// doesn't, so the compiler folds the double-float error terms away and it
-// costs about as much as plain float. The fast one renders while the observer
+// The explorer compiles two variants: a Precise one, in which the
+// double-float arithmetic works, and a fast one, in which the compiler folds
+// the double-float error terms away and it costs about as much as plain
+// float. The fast one renders while the observer
 // is at least GPUFastMinScale.
 const kageExplorer = `
 var Detail float
@@ -110,34 +110,20 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 }
 `
 
-// Kage implements shad.GPUShader.
-func (e *Explorer) Kage() []byte {
-	if e.GPU == nil {
-		return nil
-	}
-	return e.KageVariants()[0]
+// kageVariants: fast, then precise.
+func (e *Explorer) kageVariants() []shad.Kage {
+	src := append([]byte(kageExplorer), e.GPU...)
+	return []shad.Kage{{Source: src}, {Source: src, Precise: true}}
 }
 
-// KageVariants implements shad.GPUVariants: fast, then precise.
-func (e *Explorer) KageVariants() [][]byte {
-	if e.GPU == nil {
-		return nil
-	}
-	fast := append([]byte(kageExplorer), e.GPU...)
-	precise := append([]byte(kageExplorer+"\nvar PreciseMath float\n"), e.GPU...)
-	return [][]byte{fast, precise}
-}
-
-// Variant implements shad.GPUVariants.
-func (e *Explorer) Variant(f *shad.Frame) int {
+func (e *Explorer) variant(f *shad.Frame) int {
 	if f.Cam.Scale >= e.GPUFastMinScale {
 		return 0
 	}
 	return 1
 }
 
-// Uniforms implements shad.GPUUniforms.
-func (e *Explorer) Uniforms(f *shad.Frame, u map[string]any) {
+func (e *Explorer) uniforms(f *shad.Frame, u map[string]any) {
 	u["Detail"] = float32(e.Detail)
 	u["ViewDist"] = float32(e.ViewDist)
 	u["Steps"] = float32(e.Steps)
@@ -147,17 +133,19 @@ func (e *Explorer) Uniforms(f *shad.Frame, u map[string]any) {
 	u["Fog"] = shad.Vec3f(e.Fog)
 }
 
-// Handoff implements shad.GPUHandoff: it falls from 1 to 0 over the decade of
-// scale above GPUMinScale.
-func (e *Explorer) Handoff(f *shad.Frame) float64 {
+// handoff falls from 1 to 0 over the decade of scale above GPUMinScale.
+func (e *Explorer) handoff(f *shad.Frame) float64 {
 	if e.GPUMinScale <= 0 {
 		return 1
 	}
 	return math.Log10(f.Cam.Scale / e.GPUMinScale)
 }
 
-// PreferGPU implements shad.GPUPreferrer: the GPU while its 32-bit floats can
-// still resolve the detail the observer sees, the CPU below GPUMinScale.
-func (e *Explorer) PreferGPU(f *shad.Frame) bool {
-	return e.GPU != nil && f.Cam.Scale >= e.GPUMinScale
+// backend is the GPU while it can resolve what the observer sees, the CPU
+// below GPUMinScale.
+func (e *Explorer) backend(f *shad.Frame) shad.Backend {
+	if f.Cam.Scale >= e.GPUMinScale {
+		return shad.OnGPU
+	}
+	return shad.OnCPU
 }

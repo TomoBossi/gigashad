@@ -75,13 +75,28 @@ type Explorer struct {
 	Material   func(h *Hit, f *shad.Frame) shad.Vec3 // surface color
 	Background func(dir shad.Vec3, glow float64, f *shad.Frame) shad.Vec3
 	Fog        shad.Vec3 // color rays fade into near ViewDist
-	Start      shad.Player
 }
 
-func (e *Explorer) Spawn() shad.Player { return e.Start }
-
-// Static implements shad.Static: the image only depends on the camera.
-func (e *Explorer) Static() bool { return true }
+// Def returns the rendering half of a shader definition: CPU and GPU
+// versions, the choice between them, and the field. The scene adds the rest
+// (camera, bindings).
+func (e *Explorer) Def() shad.Def {
+	d := shad.Def{
+		CPU:    e,
+		Field:  e,
+		Static: func() bool { return true },
+	}
+	if e.GPU != nil {
+		d.GPU = &shad.GPU{
+			Variants: e.kageVariants(),
+			Variant:  e.variant,
+			Uniforms: e.uniforms,
+		}
+		d.Backend = e.backend
+		d.Handoff = e.handoff
+	}
+	return d
+}
 
 // Dist implements shad.Field.
 func (e *Explorer) Dist(p shad.Vec3, detail float64) float64 {

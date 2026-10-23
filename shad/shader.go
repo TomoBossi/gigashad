@@ -4,7 +4,7 @@ import "math"
 
 // Shader is the CPU equivalent of a Shadertoy mainImage: it is called once per
 // pixel per frame, concurrently from several goroutines, so Fragment must not
-// mutate shared state. Per-frame state belongs in Update (see Updater).
+// mutate shared state. Per-frame state belongs in Def.Update.
 type Shader interface {
 	// Fragment shades the pixel whose center is frag (in pixels, origin at the
 	// bottom-left like gl_FragCoord) and fills out. out arrives zeroed except
@@ -23,7 +23,7 @@ type Sample struct {
 	ID     int     // shader-defined material/object id
 	Steps  int     // shader-defined cost metric (e.g. march steps)
 
-	reused uint8 // frames this sample has been carried over by Renderer.Checker
+	reused uint8 // frames this sample has been carried over by Renderer.Reuse
 }
 
 // Field is implemented by shaders whose world is a signed distance field. It is
@@ -36,19 +36,6 @@ type Field interface {
 	Dist(p Vec3, detail float64) float64
 }
 
-// Updater is implemented by shaders that keep CPU-side state across frames
-// (the role Shadertoy's Buffer A plays). Update runs once per frame on a single
-// goroutine, before rendering.
-type Updater interface {
-	Update(f *Frame)
-}
-
-// Spawner is implemented by shaders that want the player to start somewhere
-// other than the origin.
-type Spawner interface {
-	Spawn() Player
-}
-
 // Frame holds the uniforms of one frame plus a read-only view of the previous
 // frame's G-buffer.
 type Frame struct {
@@ -56,17 +43,10 @@ type Frame struct {
 	Delta   float64 // seconds since the previous frame (iTimeDelta)
 	Index   int     // frame number (iFrame)
 	Res     Vec2    // render resolution in pixels (iResolution.xy)
-	Cam     Camera  // view derived from the player
-	Player  *Player // mutable during Update, read-only during Fragment
+	Cam     Camera  // the view; Def.Update sets it
 	Sliders [4]float64
 	Prev    *GBuffer // previous frame's samples; nil on the first frame
 
-}
-
-// Static is implemented by shaders whose image depends only on the camera,
-// not on time; the app then skips frames in which the camera didn't move.
-type Static interface {
-	Static() bool
 }
 
 // Camera is a pinhole camera. Scale is the observer's size: shaders that
