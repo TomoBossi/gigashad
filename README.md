@@ -1,7 +1,7 @@
 # gigashad
 *We have Shadertoy at home, and it runs on the CPU.*
 
-Fragment shaders written in Go, run pixel by pixel on every CPU core into a small framebuffer that the window stretches. No OpenGL.
+Fragment shaders written in Go, run pixel by pixel on a few CPU cores into a small framebuffer that the window stretches. No OpenGL. The render size adapts every frame to hold the target frame rate, and follows the window's aspect ratio.
 
 Shaders are Go types with a `Fragment` method. Unlike GPU shaders, everything they compute stays readable: the previous frame's G-buffer (depth, position, normal, id per pixel) and, for distance-field worlds, the field itself, which can be queried anywhere, on screen or not, for collisions and game logic.
 
@@ -11,8 +11,8 @@ Package `fractal` explores distance-estimated fractals at any scale for the same
 
 ## Run
 ```
-go run . -shader oolacile -width 240 -threads 3 -fps 24 -reuse 4
-go run . -backend gpu -gpuwidth 960
+go run . -shader oolacile -fps 30 -threads 3 -reuse 4
+go run . -backend cpu -width 320 -ar 16:9   # fixed resolution and aspect
 go run . -shot out.png        # one frame (GPU shots briefly open a window)
 go run . -bench 30            # time 30 frames from the spawn point
 ```

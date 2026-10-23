@@ -22,10 +22,9 @@ var shaders = map[string]func() any{
 func main() {
 	name := flag.String("shader", "oolacile", "shader to run: "+strings.Join(names(), ", "))
 	backend := flag.String("backend", "auto", "where to render: auto (the shader decides), cpu or gpu")
-	width := flag.Int("width", 240, "CPU render width in pixels; the window stretches it")
-	gpuWidth := flag.Int("gpuwidth", 960, "GPU render width in pixels")
-	ar := flag.String("ar", "16:9", "aspect ratio as w:h")
-	fps := flag.Int("fps", 24, "frame rate cap")
+	width := flag.Int("width", 0, "fixed render width in pixels; 0 adjusts it every frame to hold -fps")
+	ar := flag.String("ar", "auto", "aspect ratio as w:h, or auto to follow the window (and the monitor when fullscreen)")
+	fps := flag.Int("fps", 30, "target and cap frame rate")
 	threads := flag.Int("threads", 3, "CPU cores to render with; 0 uses all of them")
 	reuse := flag.Int("reuse", 4, "on scenes that don't change over time, shade only 1 pixel in this many per frame (1, 2 or 4) and reuse the previous frame for the rest")
 	fullscreen := flag.Bool("fullscreen", false, "start fullscreen")
@@ -38,15 +37,17 @@ func main() {
 	if !ok {
 		fail("unknown shader %q; have: %s", *name, strings.Join(names(), ", "))
 	}
-	ratio, err := parseRatio(*ar)
-	if err != nil {
-		fail("bad -ar: %v", err)
+	ratio := 0.0 // follow the window
+	if *ar != "auto" {
+		r, err := parseRatio(*ar)
+		if err != nil {
+			fail("bad -ar: %v", err)
+		}
+		ratio = r
 	}
-	if *width <= 0 || *gpuWidth <= 0 {
-		fail("-width and -gpuwidth must be positive")
+	if *width < 0 || *fps <= 0 {
+		fail("-width must be 0 or positive, -fps positive")
 	}
-	h := max(1, int(float64(*width)/ratio+0.5))
-	gpuH := max(1, int(float64(*gpuWidth)/ratio+0.5))
 	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.CPU, "gpu": shad.GPU}[*backend]
 	if !ok {
 		fail("-backend must be auto, cpu or gpu")
@@ -57,16 +58,24 @@ func main() {
 		if !ok {
 			fail("this shader has no CPU version")
 		}
-		took, err := shad.Shot(cpuShader, *width, h, *shotTime, *shot)
+		w := *width
+		if w == 0 {
+			w = shad.DefaultCPUWidth
+		}
+		if ratio == 0 {
+			ratio = 16.0 / 10 // no window to follow
+		}
+		h := max(1, int(float64(w)/ratio+0.5))
+		took, err := shad.Shot(cpuShader, w, h, *shotTime, *shot)
 		if err != nil {
 			fail("%v", err)
 		}
-		fmt.Printf("rendered %dx%d in %v -> %s\n", *width, h, took, *shot)
+		fmt.Printf("rendered %dx%d in %v -> %s\n", w, h, took, *shot)
 		return
 	}
 
 	app, err := shad.NewApp(s, shad.Options{
-		Width: *width, Height: h, GPUWidth: *gpuWidth, GPUHeight: gpuH, Backend: be,
+		Width: *width, Aspect: ratio, Backend: be,
 		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
 		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,
 	})

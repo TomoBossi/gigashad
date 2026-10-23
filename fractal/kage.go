@@ -1,6 +1,10 @@
 package fractal
 
-import "gigashad/shad"
+import (
+	"math"
+
+	"gigashad/shad"
+)
 
 // kageExplorer is Explorer.Fragment for the GPU. The scene's Kage code
 // (Explorer.GPU) must define, mirroring its Go Formula and Material:
@@ -106,6 +110,15 @@ func (e *Explorer) Uniforms(f *shad.Frame, u map[string]any) {
 	u["PixelLOD"] = float32(e.PixelLOD)
 	u["TrapFrom"] = float32(e.trapFrom(f.Cam.Scale))
 	u["Fog"] = shad.Vec3f(e.Fog)
+}
+
+// Handoff implements shad.GPUHandoff: it falls from 1 to 0 over the decade of
+// scale above GPUMinScale.
+func (e *Explorer) Handoff(f *shad.Frame) float64 {
+	if e.GPUMinScale <= 0 {
+		return 1
+	}
+	return math.Log10(f.Cam.Scale / e.GPUMinScale)
 }
 
 // PreferGPU implements shad.GPUPreferrer: the GPU while its 32-bit floats can

@@ -2,6 +2,8 @@ package shad
 
 import (
 	"fmt"
+	"image"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 )
@@ -35,6 +37,14 @@ type GPUUniforms interface {
 // precision (see fractal.Explorer).
 type GPUPreferrer interface {
 	PreferGPU(f *Frame) bool
+}
+
+// GPUHandoff is implemented by shaders that will switch from the GPU to the
+// CPU (see GPUPreferrer) and want the jump in resolution eased: Handoff
+// returns 1 while far from switching, falling to 0 at the switch, and the
+// GPU's resolution is brought down toward the CPU's as it falls.
+type GPUHandoff interface {
+	Handoff(f *Frame) float64
 }
 
 // KagePrelude starts every GPU program: pixel units, the uniforms every frame
@@ -78,7 +88,7 @@ type gpuRenderer struct {
 	extra    GPUUniforms
 }
 
-func newGPURenderer(s GPUShader, w, h int) (*gpuRenderer, error) {
+func newGPURenderer(s GPUShader) (*gpuRenderer, error) {
 	src := s.Kage()
 	if src == nil {
 		return nil, fmt.Errorf("shader has no GPU version")
@@ -87,9 +97,31 @@ func newGPURenderer(s GPUShader, w, h int) (*gpuRenderer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("compiling GPU shader: %w", err)
 	}
-	g := &gpuRenderer{shader: sh, img: ebiten.NewImage(w, h), uniforms: map[string]any{}}
+	g := &gpuRenderer{shader: sh, uniforms: map[string]any{}}
 	g.extra, _ = s.(GPUUniforms)
 	return g, nil
+}
+
+// resize makes the target image w×h, reporting whether it changed.
+func (g *gpuRenderer) resize(w, h int) bool {
+	if g.img != nil && g.img.Bounds().Dx() == w && g.img.Bounds().Dy() == h {
+		return false
+	}
+	if g.img != nil {
+		g.img.Deallocate()
+	}
+	g.img = ebiten.NewImage(w, h)
+	return true
+}
+
+// renderTimed renders and waits for the GPU to finish, so the time it returns
+// is what the frame actually cost.
+func (g *gpuRenderer) renderTimed(f *Frame) time.Duration {
+	t0 := time.Now()
+	g.render(f)
+	var px [4]byte
+	g.img.SubImage(image.Rect(0, 0, 1, 1)).(*ebiten.Image).ReadPixels(px[:])
+	return time.Since(t0)
 }
 
 func (g *gpuRenderer) render(f *Frame) {
