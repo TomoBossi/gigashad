@@ -23,6 +23,7 @@ func New() shad.Shader {
 		Steps:    160,
 		StepMul:  0.8,
 		PixelLOD: 1.2,
+		TrapRef:  0.002,
 		Fog:      shad.V3(0.01, 0.035, 0.04),
 	}
 	e.Material = material

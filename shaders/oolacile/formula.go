@@ -51,16 +51,24 @@ func (m *MixPinski) Iters(eps float64) int {
 	return fractal.LogIters(eps, math.Sqrt(m.Scale), 4, m.MaxIters)
 }
 
-// trapIters limits the orbit trap to the first iterations, so coloring follows
-// the large structures instead of aliasing on sub-pixel ones.
+// trapIters is how many iterations the orbit trap spans: enough for the
+// panel-and-circuit look, few enough that it doesn't alias on sub-pixel
+// structure.
 const trapIters = 10
 
-func (m *MixPinski) DE(p shad.Vec3, iters int) (float64, shad.Vec4) {
+func (m *MixPinski) DE(p shad.Vec3, iters, trapFrom int) (float64, shad.Vec4) {
 	x, y, z, w := p.X, p.Y, p.Z, 0.0
 	deriv := 1.0
-	trap := shad.V4(1e9, 1e9, 1e9, 1e9)
 	r2 := x*x + y*y + z*z
-	for i := 0; i < iters; i++ {
+	// Start on a MixPinski step, as the unshifted trap does, so colors line up
+	// across scales.
+	trapFrom &^= 1
+	// early is the trap over the first iterations, used instead when p
+	// escapes before reaching trapFrom.
+	var trap, early shad.Vec4
+	trapped := 0
+	i := 0
+	for ; i < iters; i++ {
 		if i&1 == 0 {
 			x, y, z, w = m.mixPinski(x, y, z, w)
 			deriv *= m.Scale
@@ -69,16 +77,30 @@ func (m *MixPinski) DE(p shad.Vec3, iters int) (float64, shad.Vec4) {
 		}
 		r2 = x*x + y*y + z*z + w*w
 		if i < trapIters {
-			trap.X = min(trap.X, math.Abs(x))
-			trap.Y = min(trap.Y, math.Abs(y))
-			trap.Z = min(trap.Z, math.Abs(z))
-			trap.W = min(trap.W, r2)
+			early = trapStep(early, i, x, y, z, r2)
+		}
+		if i >= trapFrom && trapped < trapIters {
+			trap = trapStep(trap, trapped, x, y, z, r2)
+			trapped++
 		}
 		if r2 > m.BailoutSquared {
 			break
 		}
 	}
+	if trapped == 0 {
+		trap = early
+	}
 	return math.Sqrt(r2) / math.Abs(deriv), trap
+}
+
+// trapStep folds one iteration into an orbit trap; n is how many it already
+// holds.
+func trapStep(t shad.Vec4, n int, x, y, z, r2 float64) shad.Vec4 {
+	x, y, z = math.Abs(x), math.Abs(y), math.Abs(z)
+	if n == 0 {
+		return shad.V4(x, y, z, r2)
+	}
+	return shad.V4(min(t.X, x), min(t.Y, y), min(t.Z, z), min(t.W, r2))
 }
 
 // mixPinski is one MixPinski4ex iteration: Sierpinski folds over all six

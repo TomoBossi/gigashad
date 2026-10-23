@@ -23,8 +23,10 @@ import (
 // Formula is a distance estimator.
 type Formula interface {
 	// DE estimates the distance from p to the fractal surface after at most
-	// iters iterations, and returns an orbit trap for coloring.
-	DE(p shad.Vec3, iters int) (dist float64, trap shad.Vec4)
+	// iters iterations, and returns an orbit trap for coloring gathered from
+	// iteration trapFrom on (or from the last iterations, if p escapes
+	// sooner).
+	DE(p shad.Vec3, iters, trapFrom int) (dist float64, trap shad.Vec4)
 	// Iters returns how many iterations resolve features of size eps.
 	Iters(eps float64) int
 }
@@ -54,6 +56,11 @@ type Explorer struct {
 	StepMul float64
 	// PixelLOD multiplies the pixel footprint used as the far hit threshold.
 	PixelLOD float64
+	// TrapRef is the observer size whose coloring uses the orbit trap from
+	// the first iteration. Smaller observers skip one iteration per level of
+	// detail they gained, so coloring always describes structure at their own
+	// scale instead of structure far larger than them.
+	TrapRef float64
 
 	Material   func(h *Hit, f *shad.Frame) shad.Vec3 // surface color
 	Background func(dir shad.Vec3, glow float64, f *shad.Frame) shad.Vec3
@@ -68,7 +75,7 @@ func (e *Explorer) Static() bool { return true }
 
 // Dist implements shad.Field.
 func (e *Explorer) Dist(p shad.Vec3, detail float64) float64 {
-	d, _ := e.F.DE(p, e.F.Iters(detail))
+	d, _ := e.F.DE(p, e.F.Iters(detail), 0)
 	return d
 }
 
@@ -80,6 +87,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	minEps := e.Detail * s
 	cone := cam.PixelAngle(f.Res) * e.PixelLOD
 	maxT := e.ViewDist * s
+	trapFrom := max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
 
 	t := 0.0
 	glow := 0.0
@@ -90,7 +98,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	for steps < e.Steps {
 		steps++
 		eps = math.Max(minEps, t*cone)
-		d, trap = e.F.DE(ro.Add(rd.Mul(t)), e.F.Iters(eps))
+		d, trap = e.F.DE(ro.Add(rd.Mul(t)), e.F.Iters(eps), trapFrom)
 		if d < eps {
 			hit = true
 			break
@@ -139,7 +147,7 @@ func (e *Explorer) normal(p shad.Vec3, eps float64, iters int) shad.Vec3 {
 	k := [4]shad.Vec3{shad.V3(1, -1, -1), shad.V3(-1, -1, 1), shad.V3(-1, 1, -1), shad.V3(1, 1, 1)}
 	var n shad.Vec3
 	for _, v := range k {
-		d, _ := e.F.DE(p.Add(v.Mul(h)), iters)
+		d, _ := e.F.DE(p.Add(v.Mul(h)), iters, 0)
 		n = n.Add(v.Mul(d))
 	}
 	return n.Norm()
@@ -152,7 +160,7 @@ func (e *Explorer) ao(p, n shad.Vec3, eps float64, iters int) float64 {
 	w := 1.0
 	for _, k := range [2]float64{4, 24} {
 		h := eps * k
-		d, _ := e.F.DE(p.Add(n.Mul(h)), iters)
+		d, _ := e.F.DE(p.Add(n.Mul(h)), iters, 0)
 		occ += w * math.Max(0, h-d) / h
 		w *= 0.5
 	}
