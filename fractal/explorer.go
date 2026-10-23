@@ -68,6 +68,9 @@ type Explorer struct {
 	// in 64-bit floats, below that.
 	GPU         []byte
 	GPUMinScale float64
+	// GPUFastMinScale is the smallest observer the GPU renders with fast,
+	// plain-float math; below it, it switches to precise double-float.
+	GPUFastMinScale float64
 
 	Material   func(h *Hit, f *shad.Frame) shad.Vec3 // surface color
 	Background func(dir shad.Vec3, glow float64, f *shad.Frame) shad.Vec3

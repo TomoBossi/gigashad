@@ -6,13 +6,24 @@ import (
 	"gigashad/shad"
 )
 
-// kageExplorer is Explorer.Fragment for the GPU. The scene's Kage code
+// kageExplorer is Explorer.Fragment for the GPU. Positions are double-floats
+// (see KagePrelude), split per component into a hi and a lo vec3, so the
+// formula can be evaluated far below 32-bit precision. The scene's Kage code
 // (Explorer.GPU) must define, mirroring its Go Formula and Material:
 //
-//	func de(p vec3, iters int, trapFrom int) (float, vec4)
+//	func de(hi, lo vec3, iters int, trapFrom int, eps float) (float, vec4)
 //	func itersFor(eps float) int
 //	func material(pos, normal, dir vec3, trap vec4, ao, glow float) vec3
 //	func background(dir vec3, glow float) vec3
+//
+// de gets the hit threshold eps so it can do in double-float only as many
+// iterations as that much detail needs, and the rest in plain float.
+//
+// The explorer compiles two variants: a precise one, which declares
+// PreciseMath so the double-float arithmetic works, and a fast one, which
+// doesn't, so the compiler folds the double-float error terms away and it
+// costs about as much as plain float. The fast one renders while the observer
+// is at least GPUFastMinScale.
 const kageExplorer = `
 var Detail float
 var ViewDist float
@@ -22,31 +33,36 @@ var PixelLOD float
 var TrapFrom float
 var Fog vec3
 
-func normalAt(p vec3, eps float, iters int) vec3 {
+func normalAt(ph, pl vec3, eps float, iters int) vec3 {
 	h := eps * 0.5
 	a := vec3(1, -1, -1)
 	b := vec3(-1, -1, 1)
 	c := vec3(-1, 1, -1)
 	e := vec3(1, 1, 1)
-	da, _ := de(p+a*h, iters, 0)
-	db, _ := de(p+b*h, iters, 0)
-	dc, _ := de(p+c*h, iters, 0)
-	dd, _ := de(p+e*h, iters, 0)
+	qh, ql := dfAdd3(ph, pl, a*h, vec3(0))
+	da, _ := de(qh, ql, iters, 0, eps)
+	qh, ql = dfAdd3(ph, pl, b*h, vec3(0))
+	db, _ := de(qh, ql, iters, 0, eps)
+	qh, ql = dfAdd3(ph, pl, c*h, vec3(0))
+	dc, _ := de(qh, ql, iters, 0, eps)
+	qh, ql = dfAdd3(ph, pl, e*h, vec3(0))
+	dd, _ := de(qh, ql, iters, 0, eps)
 	return normalize(a*da + b*db + c*dc + e*dd)
 }
 
-func aoAt(p vec3, n vec3, eps float, iters int) float {
+func aoAt(ph, pl vec3, n vec3, eps float, iters int) float {
 	h1 := eps * 4
 	h2 := eps * 24
-	d1, _ := de(p+n*h1, iters, 0)
-	d2, _ := de(p+n*h2, iters, 0)
+	qh, ql := dfAdd3(ph, pl, n*h1, vec3(0))
+	d1, _ := de(qh, ql, iters, 0, eps)
+	qh, ql = dfAdd3(ph, pl, n*h2, vec3(0))
+	d2, _ := de(qh, ql, iters, 0, eps)
 	occ := max(0, h1-d1)/h1 + 0.5*max(0, h2-d2)/h2
 	return clamp(1-occ*0.8, 0, 1)
 }
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	rd := camRay(fragCoord(dstPos))
-	ro := CamPos
 	minEps := Detail * CamScale
 	cone := pixelAngle() * PixelLOD
 	maxT := ViewDist * CamScale
@@ -65,7 +81,8 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		}
 		steps += 1
 		eps = max(minEps, t*cone)
-		d, trap = de(ro+rd*t, itersFor(eps), trapFrom)
+		ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
+		d, trap = de(ph, pl, itersFor(eps), trapFrom, eps)
 		if d < eps {
 			hit = true
 			break
@@ -85,10 +102,10 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		}
 		return vec4(bg, 1)
 	}
-	p := ro + rd*t
+	ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
 	iters := itersFor(eps)
-	n := normalAt(p, eps, iters)
-	col := material(p, n, rd, trap, aoAt(p, n, eps, iters), glow/steps)
+	n := normalAt(ph, pl, eps, iters)
+	col := material(ph, n, rd, trap, aoAt(ph, pl, n, eps, iters), glow/steps)
 	return vec4(mix(col, bg, fade), 1)
 }
 `
@@ -98,7 +115,25 @@ func (e *Explorer) Kage() []byte {
 	if e.GPU == nil {
 		return nil
 	}
-	return append([]byte(kageExplorer), e.GPU...)
+	return e.KageVariants()[0]
+}
+
+// KageVariants implements shad.GPUVariants: fast, then precise.
+func (e *Explorer) KageVariants() [][]byte {
+	if e.GPU == nil {
+		return nil
+	}
+	fast := append([]byte(kageExplorer), e.GPU...)
+	precise := append([]byte(kageExplorer+"\nvar PreciseMath float\n"), e.GPU...)
+	return [][]byte{fast, precise}
+}
+
+// Variant implements shad.GPUVariants.
+func (e *Explorer) Variant(f *shad.Frame) int {
+	if f.Cam.Scale >= e.GPUFastMinScale {
+		return 0
+	}
+	return 1
 }
 
 // Uniforms implements shad.GPUUniforms.

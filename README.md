@@ -7,7 +7,7 @@ Shaders are Go types with a `Fragment` method. Unlike GPU shaders, everything th
 
 Shaders can also come in a GPU version, written in [Kage](https://ebitengine.org/en/documents/shader.html) (compiled to Metal on macOS), or only in one. Each shader decides which runs: a shader with both stays on the CPU unless it prefers the GPU, and can switch per frame. `-backend cpu|gpu` overrides it.
 
-Package `fractal` explores distance-estimated fractals at any scale for the same cost: shrink to see more detail, at the price of view distance and speed. The test fractal renders on the GPU until 32-bit floats run out, then continues on the CPU.
+Package `fractal` explores distance-estimated fractals at any scale for the same cost: shrink to see more detail, at the price of view distance and speed. On the GPU it switches to double-float arithmetic (pairs of 32-bit floats) as you shrink, and reaches about as deep as the CPU's 64-bit floats. That needs Metal's fast math off, which stock ebiten can't do, hence the patched copy in `third_party/ebiten` (see its `PATCHED.md`).
 
 ## Run
 ```

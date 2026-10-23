@@ -15,6 +15,51 @@ func itersFor(eps float) int {
 	return clamp(n, 1, maxIters)
 }
 
+// floatEps is the hit threshold below which float32 iterations lose the
+// detail: each MixPinski step doubles coordinates, so features of size eps
+// need about log2(floatEps/eps) steps in double-float before float32 can
+// carry on.
+const floatEps = 2e-6
+
+// dfIters is how many iterations to do in double-float for threshold eps.
+func dfIters(eps float) int {
+	if eps >= floatEps {
+		return 0
+	}
+	return 2 * int(ceil(log2(floatEps/eps)))
+}
+
+// Double-float constants: the value is hi + lo.
+const sinOffHi = 0.21328100562095642 // -sinOffset
+const sinOffLo = -5.620956589069692e-09
+const inv2piHi = 0.15915493667125702
+const inv2piLo = 6.4206382432985265e-09
+const piHi = 3.1415927410125732
+const piLo = -8.742277657347586e-08
+const halfPiHi = 1.5707963705062866
+const halfPiLo = -4.371138828673793e-08
+const c427Hi = 0.14814814925193787
+const c427Lo = -1.1037897262866636e-09
+
+// dfSinApprox is sinApprox in double-float.
+func dfSinApprox(a vec2) vec2 {
+	v := dfMul(a, vec2(inv2piHi, inv2piLo))
+	t := dfSub(v, dfFloor(v))
+	t = t * 2
+	sgn := 1.0
+	if t.x > 1 || (t.x == 1 && t.y > 0) {
+		t = dfSub(vec2(2, 0), t)
+		sgn = -sgn
+	}
+	a = dfMul(t, vec2(piHi, piLo))
+	if !dfNeg(dfSub(a, vec2(halfPiHi, halfPiLo))) {
+		a = dfSub(a, vec2(piHi, piLo))
+		sgn = -sgn
+	}
+	a3 := dfMul(dfMul(a, a), a)
+	return dfSub(a, dfMul(vec2(c427Hi, c427Lo), a3)) * sgn
+}
+
 func sinApprox(a float) float {
 	v := a / (2 * 3.14159265358979)
 	t := 2 * (v - floor(v))
@@ -31,20 +76,92 @@ func sinApprox(a float) float {
 	return sgn * (a - a*a*a*(4.0/27.0))
 }
 
-func de(p vec3, iters int, trapFrom int) (float, vec4) {
-	x := p.x
-	y := p.y
-	z := p.z
-	w := 0.0
+func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
 	deriv := 1.0
-	r2 := dot(p, p)
 	tf := (trapFrom / 2) * 2
 	trap := vec4(1e9)
 	early := vec4(1e9)
 	trapped := 0
 	k := cscaleZ / 2 // (s-1)*cscaleZ/s with s = 2
-	for i := 0; i < maxIters; i++ {
-		if i >= iters {
+	r2 := dot(ph, ph)
+
+	// Double-float phase.
+	nd := min(dfIters(eps), iters)
+	X := vec2(ph.x, pl.x)
+	Y := vec2(ph.y, pl.y)
+	Z := vec2(ph.z, pl.z)
+	W := vec2(0)
+	i := 0
+	escaped := false
+	for j := 0; j < maxIters; j++ {
+		if i >= nd {
+			break
+		}
+		if (i/2)*2 == i {
+			T := vec2(0)
+			if dfNeg(dfAdd(X, Y)) {
+				T = -Y
+				Y = -X
+				X = T
+			}
+			if dfNeg(dfAdd(X, Z)) {
+				T = -Z
+				Z = -X
+				X = T
+			}
+			if dfNeg(dfAdd(Y, Z)) {
+				T = -Z
+				Z = -Y
+				Y = T
+			}
+			if dfNeg(dfAdd(X, W)) {
+				T = -W
+				W = -X
+				X = T
+			}
+			if dfNeg(dfAdd(Y, W)) {
+				T = -W
+				W = -Y
+				Y = T
+			}
+			if dfNeg(dfAdd(Z, W)) {
+				T = -W
+				W = -Z
+				Z = T
+			}
+			NX := dfSub(Y*2, vec2(cscaleX, 0))
+			NY := dfSub(X*2, vec2(cscaleY, 0))
+			Z = dfSub(vec2(k, 0), dfAbs(dfSub(Z, vec2(k, 0)))) * 2
+			W = dfSub(W*2, vec2(cscaleW, 0))
+			X = NX
+			Y = NY
+			deriv *= 2
+		} else {
+			W = dfSinApprox(dfAdd(W, vec2(sinOffHi, sinOffLo)))
+		}
+		r2 = X.x*X.x + Y.x*Y.x + Z.x*Z.x + W.x*W.x
+		v := vec4(abs(X.x), abs(Y.x), abs(Z.x), r2)
+		if i < trapIters {
+			early = min(early, v)
+		}
+		if i >= tf && trapped < trapIters {
+			trap = min(trap, v)
+			trapped++
+		}
+		i++
+		if r2 > bailout {
+			escaped = true
+			break
+		}
+	}
+
+	// Float phase.
+	x := X.x + X.y
+	y := Y.x + Y.y
+	z := Z.x + Z.y
+	w := W.x + W.y
+	for j := 0; j < maxIters; j++ {
+		if escaped || i >= iters {
 			break
 		}
 		if (i/2)*2 == i {
@@ -100,6 +217,7 @@ func de(p vec3, iters int, trapFrom int) (float, vec4) {
 			trap = min(trap, v)
 			trapped++
 		}
+		i++
 		if r2 > bailout {
 			break
 		}

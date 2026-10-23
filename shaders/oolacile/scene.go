@@ -29,11 +29,13 @@ func New() any {
 		PixelLOD: 1.2,
 		TrapRef:  0.002,
 		GPU:      kage,
-		// Below this size 32-bit floats can't resolve what the observer sees
-		// (the GPU image falls apart around 2e-7), and the explorer switches
-		// back to the CPU.
-		GPUMinScale: 1e-5,
-		Fog:         shad.V3(0.01, 0.035, 0.04),
+		// The GPU's double-float iterations match the CPU's 64-bit floats
+		// down to about 2e-9; below that both start to streak, the CPU a
+		// little later.
+		GPUMinScale: 5e-10,
+		// Plain floats on the GPU match the CPU down to about 2e-5.
+		GPUFastMinScale: 5e-5,
+		Fog:             shad.V3(0.01, 0.035, 0.04),
 	}
 	e.Material = material
 	e.Background = func(dir shad.Vec3, glow float64, fr *shad.Frame) shad.Vec3 {
