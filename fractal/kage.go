@@ -11,7 +11,7 @@ import (
 // formula can be evaluated far below 32-bit precision. The scene's Kage code
 // (Explorer.GPU) must define, mirroring its Go Formula and Material:
 //
-//	func de(hi, lo vec3, iters, trapFrom, eps float) (float, vec4)
+//	func de(hi, lo vec3, iters, level, eps float) (float, vec4)
 //	func itersFor(eps float) float
 //	func material(pos, normal, dir vec3, trap vec4, ao, glow float) vec3
 //	func background(dir vec3, glow float) vec3
@@ -30,7 +30,7 @@ var ViewDist float
 var Steps float
 var StepMul float
 var PixelLOD float
-var TrapFrom float
+var Level float
 var Fog vec3
 
 func normalAt(ph, pl vec3, eps float, iters float) vec3 {
@@ -40,13 +40,13 @@ func normalAt(ph, pl vec3, eps float, iters float) vec3 {
 	c := vec3(-1, 1, -1)
 	e := vec3(1, 1, 1)
 	qh, ql := dfAdd3(ph, pl, a*h, vec3(0))
-	da, _ := de(qh, ql, iters, 0, eps)
+	da, _ := de(qh, ql, iters, Level, eps)
 	qh, ql = dfAdd3(ph, pl, b*h, vec3(0))
-	db, _ := de(qh, ql, iters, 0, eps)
+	db, _ := de(qh, ql, iters, Level, eps)
 	qh, ql = dfAdd3(ph, pl, c*h, vec3(0))
-	dc, _ := de(qh, ql, iters, 0, eps)
+	dc, _ := de(qh, ql, iters, Level, eps)
 	qh, ql = dfAdd3(ph, pl, e*h, vec3(0))
-	dd, _ := de(qh, ql, iters, 0, eps)
+	dd, _ := de(qh, ql, iters, Level, eps)
 	return normalize(a*da + b*db + c*dc + e*dd)
 }
 
@@ -54,9 +54,9 @@ func aoAt(ph, pl vec3, n vec3, eps float, iters float) float {
 	h1 := eps * 4
 	h2 := eps * 24
 	qh, ql := dfAdd3(ph, pl, n*h1, vec3(0))
-	d1, _ := de(qh, ql, iters, 0, eps)
+	d1, _ := de(qh, ql, iters, Level, eps)
 	qh, ql = dfAdd3(ph, pl, n*h2, vec3(0))
-	d2, _ := de(qh, ql, iters, 0, eps)
+	d2, _ := de(qh, ql, iters, Level, eps)
 	occ := max(0, h1-d1)/h1 + 0.5*max(0, h2-d2)/h2
 	return clamp(1-occ*0.8, 0, 1)
 }
@@ -66,7 +66,6 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	minEps := Detail * CamScale
 	cone := pixelAngle() * PixelLOD
 	maxT := ViewDist * CamScale
-	trapFrom := TrapFrom
 
 	t := 0.0
 	glow := 0.0
@@ -82,7 +81,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		steps += 1
 		eps = max(minEps, t*cone)
 		ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
-		d, trap = de(ph, pl, itersFor(eps), trapFrom, eps)
+		d, trap = de(ph, pl, itersFor(eps), Level, eps)
 		if d < eps {
 			hit = true
 			break
@@ -132,8 +131,11 @@ func (e *Explorer) uniforms(f *shad.Frame, u map[string]any) {
 	u["Steps"] = float32(e.Steps)
 	u["StepMul"] = float32(e.StepMul)
 	u["PixelLOD"] = float32(e.PixelLOD)
-	u["TrapFrom"] = float32(e.trapFrom(f.Cam.Scale))
+	u["Level"] = float32(e.level(f.Cam.Scale))
 	u["Fog"] = shad.Vec3f(e.Fog)
+	if e.GPUUniforms != nil {
+		e.GPUUniforms(f, u)
+	}
 }
 
 // handoff falls from 1 to 0 over the decade of scale above GPUMinScale.

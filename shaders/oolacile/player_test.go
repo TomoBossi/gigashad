@@ -44,8 +44,8 @@ func TestPlayerStaysPutWithoutMoveInput(t *testing.T) {
 
 // R puts everything back as it was at startup.
 func TestReset(t *testing.T) {
-	d := New()
-	f := shad.FirstFrame(&d)
+	d := New(DefaultOptions())
+	f := shad.FirstFrame(&d, 0)
 	start := f.Cam
 
 	for range 24 {
@@ -76,8 +76,8 @@ func TestEveryControlKeyWorks(t *testing.T) {
 			continue
 		}
 		for _, key := range ks {
-			d := New()
-			f := shad.FirstFrame(&d)
+			d := New(DefaultOptions())
+			f := shad.FirstFrame(&d, 0)
 			start := f.Cam
 			for range 6 {
 				shad.RunFrame(&d, f, shad.ScriptedInput(1.0/30, key))

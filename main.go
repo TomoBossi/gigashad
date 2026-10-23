@@ -13,9 +13,11 @@ import (
 	"gigashad/shaders/plasma"
 )
 
-var shaders = map[string]func() shad.Def{
-	"oolacile": oolacile.New,
-	"plasma":   plasma.New,
+// shaders maps names to registration functions, which declare the shader's
+// own flags (namespaced by its name) and return its constructor.
+var shaders = map[string]func(shad.Flags) func() shad.Def{
+	"oolacile": oolacile.Register,
+	"plasma":   plasma.Register,
 }
 
 func main() {
@@ -30,9 +32,13 @@ func main() {
 	shot := flag.String("shot", "", "render one frame to this PNG and exit (GPU shots briefly open a window)")
 	shotTime := flag.Float64("time", 0, "time in seconds for -shot")
 	bench := flag.Int("bench", 0, "render this many frames from the spawn point as fast as possible, print the time per frame, and exit")
+	constructors := map[string]func() shad.Def{}
+	for n, register := range shaders {
+		constructors[n] = register(shad.NewFlags(flag.CommandLine, n))
+	}
 	flag.Parse()
 
-	mk, ok := shaders[*name]
+	mk, ok := constructors[*name]
 	if !ok {
 		fail("unknown shader %q; have: %s", *name, strings.Join(names(), ", "))
 	}

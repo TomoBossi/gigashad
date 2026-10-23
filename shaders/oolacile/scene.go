@@ -2,6 +2,7 @@ package oolacile
 
 import (
 	_ "embed"
+	"fmt"
 	"math"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -23,17 +24,39 @@ var kage []byte
 // scene is the shader's state: the explorer, the player, and its own clock.
 type scene struct {
 	e   *fractal.Explorer
+	f   *MixPinski
 	fly shad.Flyer
 	t0  float64 // Frame.Time at the last reset
+	opt Options
+	now float64 // seconds since the last reset, as of the last Update
 }
 
-func New() shad.Def {
-	s := &scene{e: newExplorer()}
+// Options are Neo Oolacile's own settings, also available as flags.
+type Options struct {
+	Breath      float64 // how much the fractal breathes; 0 holds it still
+	BreathSpeed float64 // how fast; 1 is the default pace
+}
+
+func DefaultOptions() Options { return Options{Breath: 1, BreathSpeed: 1} }
+
+// Register declares Neo Oolacile's flags and returns its constructor.
+func Register(fl shad.Flags) func() shad.Def {
+	d := DefaultOptions()
+	breath := fl.Float64("breath", d.Breath, "how much the fractal breathes; 0 holds it still")
+	speed := fl.Float64("breathspeed", d.BreathSpeed, "breathing pace; 1 is the default, 2 twice as fast")
+	return func() shad.Def { return New(Options{Breath: *breath, BreathSpeed: *speed}) }
+}
+
+func New(opt Options) shad.Def {
+	s := &scene{e: newExplorer(), opt: opt}
+	s.f = s.e.F.(*MixPinski)
 	s.fly.Keys = keys()
 	s.reset(0)
 	d := s.e.Def()
 	d.Update = s.update
-	d.Data = s.fly.Data
+	d.Data = s.data
+	d.Static = func() bool { return s.opt.Breath == 0 }
+	s.e.GPUUniforms = s.uniforms
 	d.Bindings = append(shad.StandardBindings(), shad.Binding{
 		Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
 		Action: func(c *shad.Context) { s.reset(c.Frame.Time) },
@@ -52,10 +75,40 @@ func keys() shad.FlyKeys {
 func (s *scene) reset(now float64) {
 	s.fly.Player = startPlayer()
 	s.t0 = now
+	s.breathe(0)
 }
 
 func (s *scene) update(c *shad.Context) {
 	s.fly.Update(c)
+	s.breathe(c.Frame.Time - s.t0)
+}
+
+// breathe sets the formula's animated offsets for time t: each a mix of two
+// slow sines with unrelated periods, so the motion never quite repeats.
+func (s *scene) breathe(t float64) {
+	s.now = t
+	t *= s.opt.BreathSpeed
+	a := s.opt.Breath
+	wave := func(p1, ph1, p2, ph2 float64) float64 {
+		return 0.65*math.Sin(2*math.Pi*t/p1+ph1) + 0.35*math.Sin(2*math.Pi*t/p2+ph2)
+	}
+	s.f.Breath = shad.V4(
+		0.006*wave(13.1, 0, 7.3, 1.7),
+		0.006*wave(11.7, 0.9, 5.9, 2.3),
+		0.004*wave(17.3, 0.4, 6.7, 3.1),
+		0.004*wave(15.1, 2.2, 8.9, 0.6),
+	).Mul(a)
+	s.f.SinBreath = 0.015 * a * wave(19.1, 1.1, 8.3, 0)
+}
+
+func (s *scene) uniforms(f *shad.Frame, u map[string]any) {
+	b := s.f.Breath
+	u["Breath"] = []float32{float32(b.X), float32(b.Y), float32(b.Z), float32(b.W)}
+	u["SinBreath"] = float32(s.f.SinBreath)
+}
+
+func (s *scene) data(c *shad.Context) string {
+	return s.fly.Data(c) + fmt.Sprintf("Neo Oolacile\n  breath %g, speed %g, t %.2f s\n", s.opt.Breath, s.opt.BreathSpeed, s.now)
 }
 
 func newExplorer() *fractal.Explorer {
@@ -66,7 +119,6 @@ func newExplorer() *fractal.Explorer {
 		Steps:    160,
 		StepMul:  0.8,
 		PixelLOD: 1.2,
-		TrapRef:  0.002,
 		GPU:      kage,
 		// The GPU's double-float iterations match the CPU's 64-bit floats
 		// down to about 2e-9; below that both start to streak, the CPU a

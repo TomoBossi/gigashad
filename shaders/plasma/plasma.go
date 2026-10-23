@@ -10,6 +10,9 @@ import (
 
 type plasma struct{}
 
+// Register: plasma has no flags of its own.
+func Register(shad.Flags) func() shad.Def { return New }
+
 // New: CPU and GPU versions; the CPU runs unless -backend gpu is given.
 func New() shad.Def {
 	return shad.Def{

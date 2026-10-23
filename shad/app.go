@@ -298,15 +298,15 @@ func chooseGPU(def *Def, be Backend, f *Frame) bool {
 
 // StartsOnGPU reports whether the first frame would render on the GPU.
 func StartsOnGPU(def *Def, be Backend) bool {
-	return chooseGPU(def, be, FirstFrame(def))
+	return chooseGPU(def, be, FirstFrame(def, 0))
 }
 
-// FirstFrame prepares a frame the way the app's first one is: Update with no
-// input. It is meant for a fresh Def (-shot, tests): Update may advance the
-// shader's state.
-func FirstFrame(def *Def) *Frame {
+// FirstFrame prepares a frame at time t the way the app's first one is:
+// Update with no input. It is meant for a fresh Def (-shot, tests): Update
+// may advance the shader's state.
+func FirstFrame(def *Def, t float64) *Frame {
 	p := DefaultPlayer()
-	f := &Frame{Cam: p.Camera()}
+	f := &Frame{Time: t, Cam: p.Camera()}
 	if def.Update != nil {
 		def.Update(&Context{Frame: f, Input: &Input{}})
 	}
@@ -371,8 +371,7 @@ func Shot(def *Def, w, h int, t float64, path string) (time.Duration, error) {
 		return 0, fmt.Errorf("this shader has no CPU version")
 	}
 	r := NewRenderer(w, h)
-	f := FirstFrame(def)
-	f.Time = t
+	f := FirstFrame(def, t)
 	t0 := time.Now()
 	r.Render(def.CPU, f)
 	return time.Since(t0), SavePNG(path, r.RGBA, w, h)

@@ -9,7 +9,7 @@ A shader is a `shad.Def`: a CPU version (a Go type with a `Fragment` method), a 
 - GPU variants, each optionally `Precise` (no fast math, for the double-float helpers), picked per frame.
 - `Static`: whether the image depends only on the camera, which lets the engine skip unchanged frames and reuse pixels.
 - `Field`: the world as a distance field, queryable anywhere, on screen or not, for collisions and game logic.
-- `Update` and `Bindings`: per-frame logic and keys (or key combinations) mapped to any code. `shad.Flyer` is a ready-made camera controller with configurable keys, and `shad.StandardBindings` offers quit, fullscreen, screenshots and scene data reports.
+- `Update` and `Bindings`: per-frame logic and keys (or key combinations) mapped to any code. Shaders can also declare their own command-line flags (`shad.Flags`), namespaced by the shader's name. `shad.Flyer` is a ready-made camera controller with configurable keys, and `shad.StandardBindings` offers quit, fullscreen, screenshots and scene data reports.
 
 On the CPU everything a shader computes stays readable: the previous frame's G-buffer (depth, position, normal, id per pixel) is there for game logic.
 
@@ -19,6 +19,7 @@ Package `fractal` explores distance-estimated fractals at any scale for the same
 ```
 go run . -shader oolacile -fps 30 -threads 3 -reuse 4
 go run . -backend cpu -width 320 -ar 16:9   # fixed resolution and aspect
+go run . -oolacile.breath 0                 # shaders have their own flags too (see -h)
 go run . -shot out.png        # one frame (GPU shots briefly open a window)
 go run . -bench 30            # time 30 frames from the spawn point
 ```

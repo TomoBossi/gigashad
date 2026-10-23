@@ -48,7 +48,10 @@ func (p *Player) Radius() float64 { return p.Scale / 2 }
 
 // Detail is the feature size the player's world queries resolve: things much
 // smaller than this neither block it nor need to be drawn sharply.
-func (p *Player) Detail() float64 { return p.Scale / 32 }
+func (p *Player) Detail() float64 { return p.Scale * DetailPerScale }
+
+// DetailPerScale is the ratio of Player.Detail to Player.Scale.
+const DetailPerScale = 1.0 / 32
 
 func (p *Player) Right() Vec3 { return p.Fwd.Cross(p.Up).Norm() }
 

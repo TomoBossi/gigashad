@@ -23,11 +23,16 @@ import (
 // Formula is a distance estimator.
 type Formula interface {
 	// DE estimates the distance from p to the fractal surface after at most
-	// iters iterations, and returns an orbit trap for coloring gathered from
-	// iteration trapFrom on (or from the first iterations, if p escapes
-	// sooner). Both are fractional: the estimate and the trap must change
-	// smoothly with them, or zooming makes detail and color pop.
-	DE(p shad.Vec3, iters, trapFrom float64) (dist float64, trap shad.Vec4)
+	// iters iterations, and returns an orbit trap for coloring.
+	//
+	// level is the iteration at which the fractal's features are the
+	// observer's size (Iters(scale) - Iters(1)). Whatever should look the
+	// same at every scale keys off it: which iterations the coloring
+	// samples, which ones animate.
+	//
+	// Both are fractional: the estimate and the trap must change smoothly
+	// with them, or zooming makes detail and color pop.
+	DE(p shad.Vec3, iters, level float64) (dist float64, trap shad.Vec4)
 	// Iters returns how many iterations resolve features of size eps,
 	// smoothly in eps.
 	Iters(eps float64) float64
@@ -58,11 +63,8 @@ type Explorer struct {
 	StepMul float64
 	// PixelLOD multiplies the pixel footprint used as the far hit threshold.
 	PixelLOD float64
-	// TrapRef is the observer size whose coloring uses the orbit trap from
-	// the first iteration. Smaller observers skip one iteration per level of
-	// detail they gained, so coloring always describes structure at their own
-	// scale instead of structure far larger than them.
-	TrapRef float64
+	// GPUUniforms fills in the GPU formula's own uniforms, if it has any.
+	GPUUniforms func(f *shad.Frame, u map[string]any)
 
 	// GPU is the optional Kage version of F, Material and Background (see
 	// kageExplorer for what it must define). With it, the explorer renders on
@@ -102,10 +104,10 @@ func (e *Explorer) Def() shad.Def {
 
 // Dist implements shad.Field.
 func (e *Explorer) Dist(p shad.Vec3, detail float64) float64 {
-	s := detail * 32 // detail is the player's Scale/32
-	iters := e.F.Iters(detail)
+	s := detail / shad.DetailPerScale
+	iters, level := e.F.Iters(detail), e.level(s)
 	de := func(q shad.Vec3) float64 {
-		d, _ := e.F.DE(q, iters, 0)
+		d, _ := e.F.DE(q, iters, level)
 		return d
 	}
 	d := de(p)
@@ -157,7 +159,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	minEps := e.Detail * s
 	cone := cam.PixelAngle(f.Res) * e.PixelLOD
 	maxT := e.ViewDist * s
-	trapFrom := e.trapFrom(s)
+	level := e.level(s)
 
 	t := 0.0
 	glow := 0.0
@@ -168,7 +170,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	for steps < e.Steps {
 		steps++
 		eps = math.Max(minEps, t*cone)
-		d, trap = e.F.DE(ro.Add(rd.Mul(t)), e.F.Iters(eps), trapFrom)
+		d, trap = e.F.DE(ro.Add(rd.Mul(t)), e.F.Iters(eps), level)
 		if d < eps {
 			hit = true
 			break
@@ -198,10 +200,10 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 
 	p := ro.Add(rd.Mul(t))
 	iters := e.F.Iters(eps)
-	n := e.normal(p, eps, iters)
+	n := e.normal(p, eps, iters, level)
 	h := Hit{
 		Pos: p, Normal: n, Dir: rd, T: t, TRel: t / s, Trap: trap,
-		AO: e.ao(p, n, eps, iters), Steps: steps, Glow: glowLevel(glow),
+		AO: e.ao(p, n, eps, iters, level), Steps: steps, Glow: glowLevel(glow),
 	}
 	col := e.Material(&h, f)
 	out.Color = col.Mix(bg, fade)
@@ -212,10 +214,9 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	out.ID = 1
 }
 
-// trapFrom is the first iteration the orbit trap covers for an observer of
-// size s (see TrapRef).
-func (e *Explorer) trapFrom(s float64) float64 {
-	return math.Max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
+// level is the iteration at which features are the size s (see Formula.DE).
+func (e *Explorer) level(s float64) float64 {
+	return e.F.Iters(s) - e.F.Iters(1)
 }
 
 // glowAlong is the glow gathered over a march step of length step at distance
@@ -233,12 +234,12 @@ func glowLevel(g float64) float64 {
 }
 
 // normal uses the tetrahedron technique: four DE samples instead of six.
-func (e *Explorer) normal(p shad.Vec3, eps, iters float64) shad.Vec3 {
+func (e *Explorer) normal(p shad.Vec3, eps, iters, level float64) shad.Vec3 {
 	h := eps * 0.5
 	k := [4]shad.Vec3{shad.V3(1, -1, -1), shad.V3(-1, -1, 1), shad.V3(-1, 1, -1), shad.V3(1, 1, 1)}
 	var n shad.Vec3
 	for _, v := range k {
-		d, _ := e.F.DE(p.Add(v.Mul(h)), iters, 0)
+		d, _ := e.F.DE(p.Add(v.Mul(h)), iters, level)
 		n = n.Add(v.Mul(d))
 	}
 	return n.Norm()
@@ -246,12 +247,12 @@ func (e *Explorer) normal(p shad.Vec3, eps, iters float64) shad.Vec3 {
 
 // ao compares the DE a few hit-thresholds out along the normal with the
 // distance actually travelled: occluded points see the surface sooner.
-func (e *Explorer) ao(p, n shad.Vec3, eps, iters float64) float64 {
+func (e *Explorer) ao(p, n shad.Vec3, eps, iters, level float64) float64 {
 	occ := 0.0
 	w := 1.0
 	for _, k := range [2]float64{4, 24} {
 		h := eps * k
-		d, _ := e.F.DE(p.Add(n.Mul(h)), iters, 0)
+		d, _ := e.F.DE(p.Add(n.Mul(h)), iters, level)
 		occ += w * math.Max(0, h-d) / h
 		w *= 0.5
 	}
