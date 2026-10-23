@@ -16,6 +16,7 @@ package metal
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver"
 	"github.com/hajimehoshi/ebiten/v2/internal/graphicsdriver/metal/mtl"
@@ -77,7 +78,9 @@ func (s *Shader) init(device mtl.Device) (err error) {
 		}
 	} else {
 		src = msl.Compile(s.ir)
-		lib, err = device.NewLibraryWithSource(src, mtl.CompileOptions{})
+		// Shaders declaring a PreciseMath uniform opt out of fast math.
+		precise := slices.Contains(s.ir.UniformNames, "PreciseMath")
+		lib, err = device.NewLibraryWithSource(src, mtl.CompileOptions{PreciseMath: precise})
 		if err != nil {
 			return fmt.Errorf("metal: device.MakeLibrary failed: %w, source: %s", err, src)
 		}

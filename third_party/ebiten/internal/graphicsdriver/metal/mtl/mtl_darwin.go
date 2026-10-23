@@ -642,11 +642,14 @@ func (d Device) NewLibraryWithSource(source string, opt CompileOptions) (Library
 	s := cocoa.NSString_alloc().InitWithUTF8String(source)
 	defer s.ID.Send(sel_release)
 
-	// Compile with IEEE-conformant math: fast math lets the compiler
-	// reassociate float arithmetic, which breaks error-free transformations.
-	opts := objc.ID(objc.GetClass("MTLCompileOptions")).Send(sel_new)
-	defer opts.Send(sel_release)
-	opts.Send(objc.RegisterName("setFastMathEnabled:"), false)
+	// Fast math lets the compiler reassociate float arithmetic, which breaks
+	// error-free transformations; PreciseMath turns it off.
+	var opts objc.ID
+	if opt.PreciseMath {
+		opts = objc.ID(objc.GetClass("MTLCompileOptions")).Send(sel_new)
+		defer opts.Send(sel_release)
+		opts.Send(objc.RegisterName("setFastMathEnabled:"), false)
+	}
 
 	var err cocoa.NSError
 	l := d.device.Send(
@@ -773,7 +776,8 @@ func (d Device) NewDepthStencilStateWithDescriptor(dsd DepthStencilDescriptor) D
 //
 // Reference: https://developer.apple.com/documentation/metal/mtlcompileoptions?language=objc.
 type CompileOptions struct {
-	// TODO.
+	// PreciseMath disables fast math, so float arithmetic is not reassociated.
+	PreciseMath bool
 }
 
 // Drawable is a displayable resource that can be rendered or written to.
