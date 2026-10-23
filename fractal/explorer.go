@@ -62,6 +62,13 @@ type Explorer struct {
 	// scale instead of structure far larger than them.
 	TrapRef float64
 
+	// GPU is the optional Kage version of F, Material and Background (see
+	// kageExplorer for what it must define). With it, the explorer renders on
+	// the GPU while the observer is at least GPUMinScale, and on the CPU,
+	// in 64-bit floats, below that.
+	GPU         []byte
+	GPUMinScale float64
+
 	Material   func(h *Hit, f *shad.Frame) shad.Vec3 // surface color
 	Background func(dir shad.Vec3, glow float64, f *shad.Frame) shad.Vec3
 	Fog        shad.Vec3 // color rays fade into near ViewDist
@@ -87,7 +94,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	minEps := e.Detail * s
 	cone := cam.PixelAngle(f.Res) * e.PixelLOD
 	maxT := e.ViewDist * s
-	trapFrom := max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
+	trapFrom := e.trapFrom(s)
 
 	t := 0.0
 	glow := 0.0
@@ -139,6 +146,12 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	out.Normal = n
 	out.Steps = steps
 	out.ID = 1
+}
+
+// trapFrom is the first iteration the orbit trap covers for an observer of
+// size s (see TrapRef).
+func (e *Explorer) trapFrom(s float64) int {
+	return max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
 }
 
 // normal uses the tetrahedron technique: four DE samples instead of six.

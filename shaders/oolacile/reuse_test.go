@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"gigashad/fractal"
 	"gigashad/shad"
 )
 
@@ -18,8 +19,8 @@ import (
 // means stale content. Set GIGASHAD_SHOTS to a directory to also save the
 // frames.
 func TestReuse(t *testing.T) {
-	s := New()
-	p := s.(shad.Spawner).Spawn()
+	s := New().(*fractal.Explorer)
+	p := s.Spawn()
 	const w, h = 240, 135
 	run := func(reuse int) (*shad.Renderer, time.Duration) {
 		q := p
@@ -58,8 +59,8 @@ func TestReuse(t *testing.T) {
 
 // BenchmarkFrame renders the spawn view at the default resolution.
 func BenchmarkFrame(b *testing.B) {
-	s := New()
-	p := s.(shad.Spawner).Spawn()
+	s := New().(*fractal.Explorer)
+	p := s.Spawn()
 	r := shad.NewRenderer(240, 135)
 	r.Workers = 3
 	f := &shad.Frame{Player: &p, Cam: p.Camera()}

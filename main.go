@@ -13,21 +13,25 @@ import (
 	"gigashad/shaders/plasma"
 )
 
-var shaders = map[string]func() shad.Shader{
+// Each shader is a shad.Shader (CPU), a shad.GPUShader, or both.
+var shaders = map[string]func() any{
 	"oolacile": oolacile.New,
 	"plasma":   plasma.New,
 }
 
 func main() {
 	name := flag.String("shader", "oolacile", "shader to run: "+strings.Join(names(), ", "))
-	width := flag.Int("width", 240, "render width in pixels; the window stretches it")
+	backend := flag.String("backend", "auto", "where to render: auto (the shader decides), cpu or gpu")
+	width := flag.Int("width", 240, "CPU render width in pixels; the window stretches it")
+	gpuWidth := flag.Int("gpuwidth", 960, "GPU render width in pixels")
 	ar := flag.String("ar", "16:9", "aspect ratio as w:h")
 	fps := flag.Int("fps", 24, "frame rate cap")
 	threads := flag.Int("threads", 3, "CPU cores to render with; 0 uses all of them")
 	reuse := flag.Int("reuse", 4, "on scenes that don't change over time, shade only 1 pixel in this many per frame (1, 2 or 4) and reuse the previous frame for the rest")
 	fullscreen := flag.Bool("fullscreen", false, "start fullscreen")
-	shot := flag.String("shot", "", "render one frame to this PNG and exit, without a window")
+	shot := flag.String("shot", "", "render one frame to this PNG and exit (GPU shots briefly open a window)")
 	shotTime := flag.Float64("time", 0, "time in seconds for -shot")
+	bench := flag.Int("bench", 0, "render this many frames from the spawn point as fast as possible, print the time per frame, and exit")
 	flag.Parse()
 
 	mk, ok := shaders[*name]
@@ -38,14 +42,22 @@ func main() {
 	if err != nil {
 		fail("bad -ar: %v", err)
 	}
-	if *width <= 0 {
-		fail("-width must be positive")
+	if *width <= 0 || *gpuWidth <= 0 {
+		fail("-width and -gpuwidth must be positive")
 	}
 	h := max(1, int(float64(*width)/ratio+0.5))
+	gpuH := max(1, int(float64(*gpuWidth)/ratio+0.5))
+	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.CPU, "gpu": shad.GPU}[*backend]
+	if !ok {
+		fail("-backend must be auto, cpu or gpu")
+	}
 	s := mk()
-
-	if *shot != "" {
-		took, err := shad.Shot(s, *width, h, *shotTime, *shot)
+	if *shot != "" && !shad.StartsOnGPU(s, be) {
+		cpuShader, ok := s.(shad.Shader)
+		if !ok {
+			fail("this shader has no CPU version")
+		}
+		took, err := shad.Shot(cpuShader, *width, h, *shotTime, *shot)
 		if err != nil {
 			fail("%v", err)
 		}
@@ -53,10 +65,14 @@ func main() {
 		return
 	}
 
-	app := shad.NewApp(s, shad.Options{
-		Width: *width, Height: h, FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
-		Title: "gigashad: " + *name, ShotDir: "shots",
+	app, err := shad.NewApp(s, shad.Options{
+		Width: *width, Height: h, GPUWidth: *gpuWidth, GPUHeight: gpuH, Backend: be,
+		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
+		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,
 	})
+	if err != nil {
+		fail("%v", err)
+	}
 	if err := app.Run(); err != nil {
 		fail("%v", err)
 	}

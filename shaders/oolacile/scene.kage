@@ -1,0 +1,138 @@
+// GPU version of NeoOolacile, formula.go and material: keep them in step.
+// The parameters are NeoOolacile()'s, with its identity rotation left out.
+
+const cscaleX = 1.125
+const cscaleY = 1.0
+const cscaleZ = 0.5
+const cscaleW = 0.5
+const sinOffset = -0.213281
+const bailout = 1024.0
+const maxIters = 160
+const trapIters = 10
+
+func itersFor(eps float) int {
+	n := 4 + int(ceil(log(1/eps)/log(sqrt(2.0))))
+	return clamp(n, 1, maxIters)
+}
+
+func sinApprox(a float) float {
+	v := a / (2 * 3.14159265358979)
+	t := 2 * (v - floor(v))
+	sgn := 1.0
+	if t > 1 {
+		t = 2 - t
+		sgn = -sgn
+	}
+	a = t * 3.14159265358979
+	if a >= 3.14159265358979/2 {
+		a -= 3.14159265358979
+		sgn = -sgn
+	}
+	return sgn * (a - a*a*a*(4.0/27.0))
+}
+
+func de(p vec3, iters int, trapFrom int) (float, vec4) {
+	x := p.x
+	y := p.y
+	z := p.z
+	w := 0.0
+	deriv := 1.0
+	r2 := dot(p, p)
+	tf := (trapFrom / 2) * 2
+	trap := vec4(1e9)
+	early := vec4(1e9)
+	trapped := 0
+	k := cscaleZ / 2 // (s-1)*cscaleZ/s with s = 2
+	for i := 0; i < maxIters; i++ {
+		if i >= iters {
+			break
+		}
+		if (i/2)*2 == i {
+			// Sierpinski folds over all six coordinate pairs.
+			tmp := 0.0
+			if x+y < 0 {
+				tmp = -y
+				y = -x
+				x = tmp
+			}
+			if x+z < 0 {
+				tmp = -z
+				z = -x
+				x = tmp
+			}
+			if y+z < 0 {
+				tmp = -z
+				z = -y
+				y = tmp
+			}
+			if x+w < 0 {
+				tmp = -w
+				w = -x
+				x = tmp
+			}
+			if y+w < 0 {
+				tmp = -w
+				w = -y
+				y = tmp
+			}
+			if z+w < 0 {
+				tmp = -w
+				w = -z
+				z = tmp
+			}
+			// Scale by 2, swapping x and y like the original.
+			nx := 2*y - cscaleX
+			ny := 2*x - cscaleY
+			z = 2 * (k - abs(z-k))
+			w = 2*w - cscaleW
+			x = nx
+			y = ny
+			deriv *= 2
+		} else {
+			w = sinApprox(w - sinOffset)
+		}
+		r2 = x*x + y*y + z*z + w*w
+		v := vec4(abs(x), abs(y), abs(z), r2)
+		if i < trapIters {
+			early = min(early, v)
+		}
+		if i >= tf && trapped < trapIters {
+			trap = min(trap, v)
+			trapped++
+		}
+		if r2 > bailout {
+			break
+		}
+	}
+	if trapped == 0 {
+		trap = early
+	}
+	return sqrt(r2) / abs(deriv), trap
+}
+
+func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 {
+	lightDir := normalize(vec3(0.3, 0.8, 0.5))
+	teal := vec3(0.05, 0.32, 0.33)
+	deep := vec3(0.02, 0.10, 0.16)
+	moss := vec3(0.06, 0.30, 0.20)
+	cyan := vec3(0.2, 0.95, 1.0)
+
+	tz := smoothstep(0, 0.15, trap.z)
+	tx := smoothstep(0, 0.4, trap.x)
+	base := mix(mix(deep, teal, tz), moss, 0.5*(1-tx))
+	emit := exp(-trap.y*trap.y*4000) * 1.5
+
+	diff := max(0, dot(n, lightDir))
+	head := max(0, -dot(n, dir))
+	spec := pow(max(0, dot(dir-n*(2*dot(n, dir)), lightDir)), 16)
+
+	col := base * (0.25 + 0.6*diff + 0.4*head) * ao
+	col += vec3(0.3 * spec * ao)
+	col += cyan * emit
+	col += cyan * (0.15 * glow)
+	return col
+}
+
+func background(dir vec3, glow float) vec3 {
+	return Fog + vec3(0.1, 0.6, 0.7)*(glow*glow*0.6)
+}

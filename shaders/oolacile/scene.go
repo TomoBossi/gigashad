@@ -1,6 +1,7 @@
 package oolacile
 
 import (
+	_ "embed"
 	"math"
 
 	"gigashad/fractal"
@@ -14,7 +15,10 @@ var (
 	startUp  = shad.V3(-0.4346492903452675, -0.30660142211805147, -0.8468031426238001)
 )
 
-func New() shad.Shader {
+//go:embed scene.kage
+var kage []byte
+
+func New() any {
 	f := NeoOolacile()
 	e := &fractal.Explorer{
 		F:        f,
@@ -24,7 +28,12 @@ func New() shad.Shader {
 		StepMul:  0.8,
 		PixelLOD: 1.2,
 		TrapRef:  0.002,
-		Fog:      shad.V3(0.01, 0.035, 0.04),
+		GPU:      kage,
+		// Below this size 32-bit floats can't resolve what the observer sees
+		// (the GPU image falls apart around 2e-7), and the explorer switches
+		// back to the CPU.
+		GPUMinScale: 1e-5,
+		Fog:         shad.V3(0.01, 0.035, 0.04),
 	}
 	e.Material = material
 	e.Background = func(dir shad.Vec3, glow float64, fr *shad.Frame) shad.Vec3 {
