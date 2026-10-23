@@ -11,8 +11,8 @@ import (
 // formula can be evaluated far below 32-bit precision. The scene's Kage code
 // (Explorer.GPU) must define, mirroring its Go Formula and Material:
 //
-//	func de(hi, lo vec3, iters int, trapFrom int, eps float) (float, vec4)
-//	func itersFor(eps float) int
+//	func de(hi, lo vec3, iters, trapFrom, eps float) (float, vec4)
+//	func itersFor(eps float) float
 //	func material(pos, normal, dir vec3, trap vec4, ao, glow float) vec3
 //	func background(dir vec3, glow float) vec3
 //
@@ -33,7 +33,7 @@ var PixelLOD float
 var TrapFrom float
 var Fog vec3
 
-func normalAt(ph, pl vec3, eps float, iters int) vec3 {
+func normalAt(ph, pl vec3, eps float, iters float) vec3 {
 	h := eps * 0.5
 	a := vec3(1, -1, -1)
 	b := vec3(-1, -1, 1)
@@ -50,7 +50,7 @@ func normalAt(ph, pl vec3, eps float, iters int) vec3 {
 	return normalize(a*da + b*db + c*dc + e*dd)
 }
 
-func aoAt(ph, pl vec3, n vec3, eps float, iters int) float {
+func aoAt(ph, pl vec3, n vec3, eps float, iters float) float {
 	h1 := eps * 4
 	h2 := eps * 24
 	qh, ql := dfAdd3(ph, pl, n*h1, vec3(0))
@@ -66,7 +66,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	minEps := Detail * CamScale
 	cone := pixelAngle() * PixelLOD
 	maxT := ViewDist * CamScale
-	trapFrom := int(TrapFrom)
+	trapFrom := TrapFrom
 
 	t := 0.0
 	glow := 0.0
@@ -87,15 +87,18 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 			hit = true
 			break
 		}
-		glow += eps / (d + eps)
-		t += d * StepMul
+		step := d * StepMul
+		x := d / eps
+		glow += step / eps / (1 + x*x) // see glowAlong
+		t += step
 		if t > maxT {
 			break
 		}
 	}
 
 	fade := smoothstep(0.35, 1, t/maxT)
-	bg := background(rd, glow/steps)
+	glow = 1 - exp(-glow*0.05) // see glowLevel
+	bg := background(rd, glow)
 	if !hit {
 		if steps >= Steps && t < maxT {
 			bg = mix(bg, Fog, 1-fade)
@@ -105,7 +108,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
 	iters := itersFor(eps)
 	n := normalAt(ph, pl, eps, iters)
-	col := material(ph, n, rd, trap, aoAt(ph, pl, n, eps, iters), glow/steps)
+	col := material(ph, n, rd, trap, aoAt(ph, pl, n, eps, iters), glow)
 	return vec4(mix(col, bg, fade), 1)
 }
 `

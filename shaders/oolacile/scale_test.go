@@ -44,7 +44,7 @@ func TestScaleInvariance(t *testing.T) {
 			steps += s.Steps
 		}
 		n := len(r.Last().Samples)
-		t.Logf("scale %.0e  %4.0f ms  iters at camera %3d  hit %3.0f%%  avg steps %.1f",
+		t.Logf("scale %.0e  %4.0f ms  iters at camera %5.1f  hit %3.0f%%  avg steps %.1f",
 			p.Scale, float64(took.Microseconds())/1000, e.F.Iters(e.Detail*p.Scale), 100*float64(hits)/float64(n), float64(steps)/float64(n))
 		if dir := os.Getenv("GIGASHAD_SHOTS"); dir != "" {
 			shad.SavePNG(filepath.Join(dir, fmt.Sprintf("scale%d.png", i)), r.RGBA, r.W, r.H)

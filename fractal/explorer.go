@@ -24,11 +24,13 @@ import (
 type Formula interface {
 	// DE estimates the distance from p to the fractal surface after at most
 	// iters iterations, and returns an orbit trap for coloring gathered from
-	// iteration trapFrom on (or from the last iterations, if p escapes
-	// sooner).
-	DE(p shad.Vec3, iters, trapFrom int) (dist float64, trap shad.Vec4)
-	// Iters returns how many iterations resolve features of size eps.
-	Iters(eps float64) int
+	// iteration trapFrom on (or from the first iterations, if p escapes
+	// sooner). Both are fractional: the estimate and the trap must change
+	// smoothly with them, or zooming makes detail and color pop.
+	DE(p shad.Vec3, iters, trapFrom float64) (dist float64, trap shad.Vec4)
+	// Iters returns how many iterations resolve features of size eps,
+	// smoothly in eps.
+	Iters(eps float64) float64
 }
 
 // Hit describes where a view ray landed, for Material.
@@ -128,8 +130,9 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 			hit = true
 			break
 		}
-		glow += eps / (d + eps)
-		t += d * e.StepMul
+		step := d * e.StepMul
+		glow += glowAlong(step, d, eps)
+		t += step
 		if t > maxT {
 			break
 		}
@@ -138,7 +141,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	fade := shad.Smoothstep(0.35, 1, t/maxT)
 	bg := e.Fog
 	if e.Background != nil {
-		bg = e.Background(rd, glow/float64(steps), f)
+		bg = e.Background(rd, glowLevel(glow), f)
 	}
 	if !hit {
 		if steps >= e.Steps && t < maxT {
@@ -155,7 +158,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	n := e.normal(p, eps, iters)
 	h := Hit{
 		Pos: p, Normal: n, Dir: rd, T: t, TRel: t / s, Trap: trap,
-		AO: e.ao(p, n, eps, iters), Steps: steps, Glow: glow / float64(steps),
+		AO: e.ao(p, n, eps, iters), Steps: steps, Glow: glowLevel(glow),
 	}
 	col := e.Material(&h, f)
 	out.Color = col.Mix(bg, fade)
@@ -168,12 +171,26 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 
 // trapFrom is the first iteration the orbit trap covers for an observer of
 // size s (see TrapRef).
-func (e *Explorer) trapFrom(s float64) int {
-	return max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
+func (e *Explorer) trapFrom(s float64) float64 {
+	return math.Max(0, e.F.Iters(s)-e.F.Iters(e.TrapRef))
+}
+
+// glowAlong is the glow gathered over a march step of length step at distance
+// d from the surface: near misses, measured in pixel footprints (eps), glow.
+// It is an integral along the ray, so it doesn't depend on how many steps
+// the march happened to take.
+func glowAlong(step, d, eps float64) float64 {
+	x := d / eps
+	return step / eps / (1 + x*x)
+}
+
+// glowLevel maps gathered glow to 0..1.
+func glowLevel(g float64) float64 {
+	return 1 - math.Exp(-g*0.05)
 }
 
 // normal uses the tetrahedron technique: four DE samples instead of six.
-func (e *Explorer) normal(p shad.Vec3, eps float64, iters int) shad.Vec3 {
+func (e *Explorer) normal(p shad.Vec3, eps, iters float64) shad.Vec3 {
 	h := eps * 0.5
 	k := [4]shad.Vec3{shad.V3(1, -1, -1), shad.V3(-1, -1, 1), shad.V3(-1, 1, -1), shad.V3(1, 1, 1)}
 	var n shad.Vec3
@@ -186,7 +203,7 @@ func (e *Explorer) normal(p shad.Vec3, eps float64, iters int) shad.Vec3 {
 
 // ao compares the DE a few hit-thresholds out along the normal with the
 // distance actually travelled: occluded points see the surface sooner.
-func (e *Explorer) ao(p, n shad.Vec3, eps float64, iters int) float64 {
+func (e *Explorer) ao(p, n shad.Vec3, eps, iters float64) float64 {
 	occ := 0.0
 	w := 1.0
 	for _, k := range [2]float64{4, 24} {
@@ -201,7 +218,7 @@ func (e *Explorer) ao(p, n shad.Vec3, eps float64, iters int) float64 {
 // LogIters is the usual Iters for an escape-time IFS: base iterations plus
 // enough to shrink features of size eps to unit size when each iteration
 // scales by k.
-func LogIters(eps, k float64, base, maxIters int) int {
-	n := base + int(math.Ceil(math.Log(1/eps)/math.Log(k)))
-	return max(1, min(n, maxIters))
+func LogIters(eps, k, base float64, maxIters int) float64 {
+	n := base + math.Log(1/eps)/math.Log(k)
+	return math.Max(1, math.Min(n, float64(maxIters)))
 }

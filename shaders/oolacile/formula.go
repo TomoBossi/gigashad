@@ -47,7 +47,7 @@ func (m *MixPinski) Prepare() {
 
 // Iters: one MixPinski step per two iterations, each scaling by Scale, plus a
 // margin for the escape radius.
-func (m *MixPinski) Iters(eps float64) int {
+func (m *MixPinski) Iters(eps float64) float64 {
 	return fractal.LogIters(eps, math.Sqrt(m.Scale), 4, m.MaxIters)
 }
 
@@ -56,19 +56,33 @@ func (m *MixPinski) Iters(eps float64) int {
 // structure.
 const trapIters = 10
 
-func (m *MixPinski) DE(p shad.Vec3, iters, trapFrom int) (float64, shad.Vec4) {
+// DE takes fractional iterations and trap starts, so that detail and color
+// change smoothly with them. The iteration repeats every two (a MixPinski
+// step, then a sine), so it runs whole pairs and blends the estimate after
+// the last whole pair with the one after the next, and likewise blends trap
+// windows a pair apart.
+func (m *MixPinski) DE(p shad.Vec3, iters, trapFrom float64) (float64, shad.Vec4) {
 	x, y, z, w := p.X, p.Y, p.Z, 0.0
 	deriv := 1.0
 	r2 := x*x + y*y + z*z
-	// Start on a MixPinski step, as the unshifted trap does, so colors line up
-	// across scales.
-	trapFrom &^= 1
+
+	pairs := iters / 2
+	n := int(pairs) * 2 // whole pairs, in iterations
+	frac := pairs - math.Floor(pairs)
+	tp := trapFrom / 2
+	ta := int(tp) * 2 // first trap window; the second starts a pair later
+	tfrac := tp - math.Floor(tp)
+
 	// early is the trap over the first iterations, used instead when p
-	// escapes before reaching trapFrom.
-	var trap, early shad.Vec4
-	trapped := 0
+	// escapes before reaching the windows.
+	var early, trapA, trapB shad.Vec4
+	inA, inB := 0, 0
+	d0 := math.NaN() // the estimate after n iterations
 	i := 0
-	for ; i < iters; i++ {
+	for ; i < n+2 && i < m.MaxIters; i++ {
+		if i == n {
+			d0 = math.Sqrt(r2) / deriv
+		}
 		if i&1 == 0 {
 			x, y, z, w = m.mixPinski(x, y, z, w)
 			deriv *= m.Scale
@@ -79,18 +93,34 @@ func (m *MixPinski) DE(p shad.Vec3, iters, trapFrom int) (float64, shad.Vec4) {
 		if i < trapIters {
 			early = trapStep(early, i, x, y, z, r2)
 		}
-		if i >= trapFrom && trapped < trapIters {
-			trap = trapStep(trap, trapped, x, y, z, r2)
-			trapped++
+		if i >= ta && inA < trapIters {
+			trapA = trapStep(trapA, inA, x, y, z, r2)
+			inA++
+		}
+		if i >= ta+2 && inB < trapIters {
+			trapB = trapStep(trapB, inB, x, y, z, r2)
+			inB++
 		}
 		if r2 > m.BailoutSquared {
 			break
 		}
 	}
-	if trapped == 0 {
-		trap = early
+	d := math.Sqrt(r2) / deriv
+	if !math.IsNaN(d0) {
+		d = d0 + (d-d0)*frac
 	}
-	return math.Sqrt(r2) / math.Abs(deriv), trap
+	trap := early
+	switch {
+	case inB > 0:
+		trap = mixV4(trapA, trapB, tfrac)
+	case inA > 0:
+		trap = trapA
+	}
+	return d, trap
+}
+
+func mixV4(a, b shad.Vec4, t float64) shad.Vec4 {
+	return shad.V4(a.X+(b.X-a.X)*t, a.Y+(b.Y-a.Y)*t, a.Z+(b.Z-a.Z)*t, a.W+(b.W-a.W)*t)
 }
 
 // trapStep folds one iteration into an orbit trap; n is how many it already

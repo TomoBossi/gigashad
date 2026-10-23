@@ -8,11 +8,11 @@ const cscaleW = 0.5
 const sinOffset = -0.213281
 const bailout = 1024.0
 const maxIters = 160
+const maxItersF = 160.0
 const trapIters = 10
 
-func itersFor(eps float) int {
-	n := 4 + int(ceil(log(1/eps)/log(sqrt(2.0))))
-	return clamp(n, 1, maxIters)
+func itersFor(eps float) float {
+	return clamp(4+log(1/eps)/log(sqrt(2.0)), 1, maxItersF)
 }
 
 // floatEps is the hit threshold below which float32 iterations lose the
@@ -76,17 +76,48 @@ func sinApprox(a float) float {
 	return sgn * (a - a*a*a*(4.0/27.0))
 }
 
-func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
+// trapsAdd folds iteration i into the early trap and the two trap windows
+// starting at ta and ta+2 (see de).
+func trapsAdd(i int, ta int, v vec4, early vec4, trapA vec4, trapB vec4, inA int, inB int) (vec4, vec4, vec4, int, int) {
+	if i < trapIters {
+		early = min(early, v)
+	}
+	if i >= ta && inA < trapIters {
+		trapA = min(trapA, v)
+		inA++
+	}
+	if i >= ta+2 && inB < trapIters {
+		trapB = min(trapB, v)
+		inB++
+	}
+	return early, trapA, trapB, inA, inB
+}
+
+// de mirrors MixPinski.DE: whole pairs of iterations, blending the estimate
+// after the last whole pair with the one after the next, and trap windows a
+// pair apart. The first dfIters(eps) iterations run in double-float.
+func de(ph vec3, pl vec3, iters float, trapFrom float, eps float) (float, vec4) {
 	deriv := 1.0
-	tf := (trapFrom / 2) * 2
-	trap := vec4(1e9)
-	early := vec4(1e9)
-	trapped := 0
 	k := cscaleZ / 2 // (s-1)*cscaleZ/s with s = 2
 	r2 := dot(ph, ph)
 
+	pairs := iters / 2
+	n := int(pairs) * 2
+	frac := fract(pairs)
+	tp := trapFrom / 2
+	ta := int(tp) * 2
+	tfrac := fract(tp)
+	end := min(n+2, maxIters)
+
+	early := vec4(1e9)
+	trapA := vec4(1e9)
+	trapB := vec4(1e9)
+	inA := 0
+	inB := 0
+	d0 := -1.0 // the estimate after n iterations, once known
+
 	// Double-float phase.
-	nd := min(dfIters(eps), iters)
+	nd := min(dfIters(eps), end)
 	X := vec2(ph.x, pl.x)
 	Y := vec2(ph.y, pl.y)
 	Z := vec2(ph.z, pl.z)
@@ -96,6 +127,9 @@ func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
 	for j := 0; j < maxIters; j++ {
 		if i >= nd {
 			break
+		}
+		if i == n {
+			d0 = sqrt(r2) / deriv
 		}
 		if (i/2)*2 == i {
 			T := vec2(0)
@@ -140,14 +174,7 @@ func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
 			W = dfSinApprox(dfAdd(W, vec2(sinOffHi, sinOffLo)))
 		}
 		r2 = X.x*X.x + Y.x*Y.x + Z.x*Z.x + W.x*W.x
-		v := vec4(abs(X.x), abs(Y.x), abs(Z.x), r2)
-		if i < trapIters {
-			early = min(early, v)
-		}
-		if i >= tf && trapped < trapIters {
-			trap = min(trap, v)
-			trapped++
-		}
+		early, trapA, trapB, inA, inB = trapsAdd(i, ta, vec4(abs(X.x), abs(Y.x), abs(Z.x), r2), early, trapA, trapB, inA, inB)
 		i++
 		if r2 > bailout {
 			escaped = true
@@ -161,8 +188,11 @@ func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
 	z := Z.x + Z.y
 	w := W.x + W.y
 	for j := 0; j < maxIters; j++ {
-		if escaped || i >= iters {
+		if escaped || i >= end {
 			break
+		}
+		if i == n {
+			d0 = sqrt(r2) / deriv
 		}
 		if (i/2)*2 == i {
 			// Sierpinski folds over all six coordinate pairs.
@@ -209,23 +239,24 @@ func de(ph vec3, pl vec3, iters int, trapFrom int, eps float) (float, vec4) {
 			w = sinApprox(w - sinOffset)
 		}
 		r2 = x*x + y*y + z*z + w*w
-		v := vec4(abs(x), abs(y), abs(z), r2)
-		if i < trapIters {
-			early = min(early, v)
-		}
-		if i >= tf && trapped < trapIters {
-			trap = min(trap, v)
-			trapped++
-		}
+		early, trapA, trapB, inA, inB = trapsAdd(i, ta, vec4(abs(x), abs(y), abs(z), r2), early, trapA, trapB, inA, inB)
 		i++
 		if r2 > bailout {
 			break
 		}
 	}
-	if trapped == 0 {
-		trap = early
+
+	d := sqrt(r2) / deriv
+	if d0 >= 0 {
+		d = mix(d0, d, frac)
 	}
-	return sqrt(r2) / abs(deriv), trap
+	trap := early
+	if inB > 0 {
+		trap = mix(trapA, trapB, tfrac)
+	} else if inA > 0 {
+		trap = trapA
+	}
+	return d, trap
 }
 
 func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 {
