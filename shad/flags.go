@@ -7,9 +7,9 @@ import (
 
 // Flags lets a shader declare its own command-line flags. Names are
 // namespaced by the shader, so -breath declared by "oolacile" is
-// -oolacile.breath; they are parsed with the engine's own flags and listed in
-// -h. Declare them when registering the shader and read them when building
-// its Def.
+// -oolacile.breath; they are parsed with the engine's own flags and listed by
+// -shader <name> -h. Declare them when registering the shader and read them
+// when building its Def.
 type Flags struct {
 	set    *flag.FlagSet
 	prefix string

@@ -72,6 +72,13 @@ type App struct {
 	lodW    float64 // Frame.LOD width, trailing the render width
 	lastH   int
 	took    time.Duration // render time of the last frame
+
+	// The frame rate counter counts frames that reach the screen, not
+	// Update or Draw calls: Draw runs at the display's rate whatever -fps is.
+	frames, shown int // frames made by Update, and the last one drawn
+	fpsN          int // frames drawn since fpsSince
+	fpsSince      time.Time
+	fps           float64
 }
 
 var errQuit = errors.New("quit")
@@ -235,7 +242,8 @@ func (a *App) Update() error {
 	}
 
 	if a.static() && f.Index > 0 && f.Cam == a.lastCam && gpu == a.onGPU && w == a.lastW && h == a.lastH {
-		return nil // nothing changed; keep showing the last frame
+		a.frames++ // nothing changed; the last frame is still current
+		return nil
 	}
 	a.lastCam, a.lastW, a.lastH = f.Cam, w, h
 	a.onGPU = gpu
@@ -268,6 +276,7 @@ func (a *App) Update() error {
 		res.observe(took.Seconds())
 	}
 	a.took = took
+	a.frames++
 	f.Index++
 
 	if a.opt.ShotPath != "" {
@@ -378,8 +387,26 @@ func (a *App) Draw(screen *ebiten.Image) {
 	op.GeoM.Translate((sw-scale*w)/2, (sh-scale*h)/2)
 	screen.DrawImage(img, op)
 	if a.opt.ShowFPS {
-		drawFPS(screen)
+		drawFPS(screen, a.countFPS())
 	}
+}
+
+// countFPS counts new frames as they're drawn and returns the rate over the
+// last second or so.
+func (a *App) countFPS() float64 {
+	now := time.Now()
+	if a.fpsSince.IsZero() {
+		a.fpsSince = now
+	}
+	if a.frames != a.shown {
+		a.shown = a.frames
+		a.fpsN++
+	}
+	if d := now.Sub(a.fpsSince).Seconds(); d >= 1 {
+		a.fps = float64(a.fpsN) / d
+		a.fpsN, a.fpsSince = 0, now
+	}
+	return a.fps
 }
 
 // fpsText holds the counter's text, drawn once and stamped several times.
@@ -388,10 +415,10 @@ var fpsText *ebiten.Image
 // drawFPS draws the frame rate in the bottom-right corner, white with a black
 // outline so it reads over any image. It goes on the screen only, never into
 // screenshots.
-func drawFPS(screen *ebiten.Image) {
+func drawFPS(screen *ebiten.Image, fps float64) {
 	// ebitenutil's debug font: 6 pixels per character, 16 per line.
 	const charW, lineH, pad = 6, 16, 3
-	s := fmt.Sprintf("%.0f fps", ebiten.ActualFPS())
+	s := fmt.Sprintf("%.0f fps", fps)
 	w := len(s)*charW + 2
 	if fpsText == nil || fpsText.Bounds().Dx() < w {
 		fpsText = ebiten.NewImage(w+4*charW, lineH)

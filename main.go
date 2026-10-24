@@ -33,17 +33,42 @@ func main() {
 	shotTime := flag.Float64("time", 0, "time in seconds for -shot")
 	showFPS := flag.Bool("showfps", false, "show a frame rate counter in the bottom-right corner")
 	bench := flag.Int("bench", 0, "render this many frames from the spawn point as fast as possible, print the time per frame, and exit")
-	constructors := map[string]func() shad.Def{}
-	for n, register := range shaders {
-		constructors[n] = register(shad.NewFlags(flag.CommandLine, n))
+	// Only the chosen shader's flags are declared, so -h lists them only
+	// when a shader is given: gigashad -shader oolacile -h.
+	engine := flag.NewFlagSet("", flag.ContinueOnError)
+	flag.VisitAll(func(f *flag.Flag) { engine.Var(f.Value, f.Name, f.Usage) })
+	chosen := shaderArg(os.Args[1:])
+	var own *flag.FlagSet
+	var mk func() shad.Def
+	if register, ok := shaders[chosen]; ok {
+		own = flag.NewFlagSet("", flag.ContinueOnError)
+		mk = register(shad.NewFlags(own, chosen))
+		own.VisitAll(func(f *flag.Flag) { flag.Var(f.Value, f.Name, f.Usage) })
+	}
+	flag.Usage = func() {
+		out := flag.CommandLine.Output()
+		fmt.Fprintf(out, "Usage: gigashad -shader <name> [flags]\n\nFlags:\n")
+		engine.SetOutput(out)
+		engine.PrintDefaults()
+		if own == nil {
+			fmt.Fprintf(out, "\nFor a shader's own flags: gigashad -shader <name> -h\n")
+			return
+		}
+		fmt.Fprintf(out, "\n%s flags:\n", chosen)
+		own.SetOutput(out)
+		own.PrintDefaults()
+		none := true
+		own.VisitAll(func(*flag.Flag) { none = false })
+		if none {
+			fmt.Fprintf(out, "  (none)\n")
+		}
 	}
 	flag.Parse()
 
 	if *name == "" {
 		fail("pick a shader with -shader: %s", strings.Join(names(), ", "))
 	}
-	mk, ok := constructors[*name]
-	if !ok {
+	if mk == nil {
 		fail("unknown shader %q; have: %s", *name, strings.Join(names(), ", "))
 	}
 	ratio := 0.0 // follow the window
@@ -97,6 +122,24 @@ func main() {
 	if err := app.Run(); err != nil {
 		fail("%v", err)
 	}
+}
+
+// shaderArg finds the value of -shader in args before they're parsed, so its
+// flags can be declared first.
+func shaderArg(args []string) string {
+	for i, a := range args {
+		if a == "--" {
+			break
+		}
+		a = strings.TrimPrefix(strings.TrimPrefix(a, "-"), "-")
+		if v, ok := strings.CutPrefix(a, "shader="); ok {
+			return v
+		}
+		if a == "shader" && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
 }
 
 func names() []string {
