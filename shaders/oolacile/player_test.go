@@ -88,3 +88,17 @@ func TestEveryControlKeyWorks(t *testing.T) {
 		}
 	}
 }
+
+// With no input the camera stays exactly the same, bit for bit: the app
+// treats any change as movement.
+func TestCameraStillWithoutInput(t *testing.T) {
+	d := New(DefaultOptions())
+	f := shad.FirstFrame(&d, 0)
+	for i := range 30 {
+		prev := f.Cam
+		shad.RunFrame(&d, f, shad.ScriptedInput(1.0/30))
+		if f.Cam != prev {
+			t.Fatalf("frame %d: the camera changed with no input", i)
+		}
+	}
+}

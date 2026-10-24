@@ -65,6 +65,12 @@ func (p *Player) Camera() Camera {
 // stops short of straight up/down. Flying, there is no fixed up: pitch and
 // roll carry Up along, so the view can loop and spin freely.
 func (p *Player) Look(yaw, pitch, roll float64) {
+	if yaw == 0 && pitch == 0 && roll == 0 {
+		// Leave the vectors alone: renormalizing them changes their last
+		// bits, and a camera that changes every frame never counts as
+		// still (no frame skipping, resizes allowed).
+		return
+	}
 	right := p.Right()
 	if p.Walk {
 		cur := math.Acos(Clamp(p.Fwd.Dot(p.Up), -1, 1)) // 0 = looking up
