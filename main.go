@@ -52,7 +52,7 @@ func main() {
 		engine.SetOutput(out)
 		engine.PrintDefaults()
 		if own == nil {
-			fmt.Fprintf(out, "\nFor a shader's own flags: gigashad -shader <name> -h\n")
+			fmt.Fprintf(out, "\nFor a shader's own controls and flags: gigashad -shader <name> -h\n")
 			return
 		}
 		fmt.Fprintf(out, "\n%s flags:\n", chosen)
