@@ -161,7 +161,7 @@ type space struct {
 	e     *Explorer
 	oct   [warpOctaves]octave
 	n     int
-	scale float64 // keeps distance estimates safe under the deformation
+	scale float64 // shrinks march steps so they stay safe under the deformation
 }
 
 func (e *Explorer) space(s float64) space {
@@ -178,7 +178,7 @@ func (sp *space) de(p shad.Vec3, iters, level float64) (float64, shad.Vec4) {
 		p = p.Add(sp.e.Warp.displace(p, &sp.oct, sp.n))
 	}
 	d, trap := sp.e.F.DE(p, iters, level)
-	return d * sp.scale, trap
+	return d, trap
 }
 
 func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
@@ -206,7 +206,9 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 			hit = true
 			break
 		}
-		step := d * e.StepMul
+		// Hits and draw decisions use the unscaled estimate, as without the
+		// warp; only the step shrinks to stay safe in deformed space.
+		step := d * e.StepMul * sp.scale
 		glow += glowAlong(step, d, eps)
 		t += step
 		if t > maxT {

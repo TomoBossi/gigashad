@@ -67,7 +67,7 @@ func warpAt(q vec3) vec3 {
 func deAt(q vec3, iters float, eps float) (float, vec4) {
 	ph, pl := dfAdd3(CamPos, CamPosLo, q+warpAt(q), vec3(0))
 	d, trap := de(ph, pl, iters, Level, eps)
-	return d * WarpScale, trap
+	return d, trap
 }
 
 func normalAt(q vec3, eps float, iters float) vec3 {
@@ -116,7 +116,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 			hit = true
 			break
 		}
-		step := d * StepMul
+		step := d * StepMul * WarpScale // see Explorer.Fragment
 		x := d / eps
 		glow += step / eps / (1 + x*x) // see glowAlong
 		t += step

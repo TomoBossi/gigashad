@@ -50,9 +50,9 @@ func Register(fl shad.Flags) func() shad.Def {
 func New(opt Options) shad.Def {
 	s := &scene{e: newExplorer(), opt: opt}
 	s.f = s.e.F.(*MixPinski)
-	// Breathing: a smooth deformation of space at scales 2-64 observer sizes,
+	// Breathing: a smooth deformation of space at scales 8-128 observer sizes,
 	// which sways the fractal without changing its shape's topology.
-	s.e.Warp = &fractal.Warp{Amp: 0.012 * opt.Breath, Speed: opt.BreathSpeed, MinRatio: 2, MaxRatio: 64}
+	s.e.Warp = &fractal.Warp{Amp: 0.008 * opt.Breath, Speed: opt.BreathSpeed, MinRatio: 8, MaxRatio: 128}
 	s.fly.Keys = keys()
 	s.reset(0)
 	d := s.e.Def()
