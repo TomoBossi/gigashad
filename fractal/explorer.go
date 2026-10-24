@@ -102,9 +102,52 @@ func (e *Explorer) Def() shad.Def {
 
 // Dist implements shad.Field.
 func (e *Explorer) Dist(p shad.Vec3, detail float64) float64 {
-	d, _ := e.F.DE(p, e.F.Iters(detail), 0)
-	return d
+	s := detail * 32 // detail is the player's Scale/32
+	iters := e.F.Iters(detail)
+	de := func(q shad.Vec3) float64 {
+		d, _ := e.F.DE(q, iters, 0)
+		return d
+	}
+	d := de(p)
+	if d > confirmRange*s || d < detail {
+		return d
+	}
+	// Distance estimates can underestimate a lot: some regions report a
+	// near-constant distance with no surface anywhere near, which would
+	// make invisible walls. Confirm that a surface is really there the way
+	// rendering finds one, by marching toward it until the estimate drops
+	// below detail; if that doesn't happen within confirmRange, report that
+	// far instead.
+	h := detail * 0.5
+	g := shad.V3(
+		de(p.Add(shad.V3(h, 0, 0)))-de(p.Sub(shad.V3(h, 0, 0))),
+		de(p.Add(shad.V3(0, h, 0)))-de(p.Sub(shad.V3(0, h, 0))),
+		de(p.Add(shad.V3(0, 0, h)))-de(p.Sub(shad.V3(0, 0, h))),
+	)
+	if g == (shad.Vec3{}) {
+		return d
+	}
+	dir := g.Norm().Neg()
+	t := 0.0
+	for range confirmSteps {
+		dt := de(p.Add(dir.Mul(t)))
+		if dt < detail {
+			return d // a real surface, about d away
+		}
+		t += dt
+		if t > confirmRange*s {
+			break
+		}
+	}
+	return math.Max(d, t)
 }
+
+// confirmRange (observer sizes) and confirmSteps bound Dist's check that a
+// near surface is real.
+const (
+	confirmRange = 3.0
+	confirmSteps = 32
+)
 
 func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	cam := &f.Cam
