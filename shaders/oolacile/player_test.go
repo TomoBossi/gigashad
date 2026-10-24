@@ -60,3 +60,31 @@ func TestReset(t *testing.T) {
 		t.Errorf("after R the camera is %+v, want the startup %+v", f.Cam, start)
 	}
 }
+
+// Every movement and look key does something on its own.
+func TestEveryControlKeyWorks(t *testing.T) {
+	k := keys()
+	controls := map[string][]shad.Key{
+		"forward": k.Forward, "back": k.Back, "left": k.Left, "right": k.Right,
+		"up": k.Up, "down": k.Down, "grow": k.Grow, "shrink": k.Shrink,
+		"yaw left": k.YawLeft, "yaw right": k.YawRight, "pitch up": k.PitchUp,
+		"pitch down": k.PitchDown, "roll left": k.RollLeft, "roll right": k.RollRight,
+	}
+	for name, ks := range controls {
+		if len(ks) == 0 {
+			t.Errorf("%s has no key", name)
+			continue
+		}
+		for _, key := range ks {
+			d := New()
+			f := shad.FirstFrame(&d)
+			start := f.Cam
+			for range 6 {
+				shad.RunFrame(&d, f, shad.ScriptedInput(1.0/30, key))
+			}
+			if f.Cam == start {
+				t.Errorf("%s (key %v) didn't change the camera", name, key)
+			}
+		}
+	}
+}

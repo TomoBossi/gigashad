@@ -45,7 +45,7 @@ func New() shad.Def {
 // roll, Z/C shrink/grow.
 func keys() shad.FlyKeys {
 	k := shad.DefaultFlyKeys()
-	k.Down = ebiten.KeyMeta
+	k.Down = shad.Keys(ebiten.KeyMeta)
 	return k
 }
 
