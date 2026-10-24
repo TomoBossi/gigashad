@@ -164,5 +164,5 @@ func (a *App) outPath(path, ext string) (string, error) {
 	if err := os.MkdirAll(a.opt.ShotDir, 0o755); err != nil {
 		return "", err
 	}
-	return filepath.Join(a.opt.ShotDir, time.Now().Format("20060102-150405")+ext), nil
+	return filepath.Join(a.opt.ShotDir, time.Now().Format("20060102-150405.000")+ext), nil
 }
