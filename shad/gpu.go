@@ -26,9 +26,11 @@ var CamFovY float
 var CamScale float
 
 // fragCoord converts dstPos to the CPU's convention: pixel centers, origin at
-// the bottom-left.
+// the bottom-left. dstPos is relative to the texture atlas the image lives
+// in, not to the image.
 func fragCoord(dstPos vec4) vec2 {
-	return vec2(dstPos.x, Resolution.y-dstPos.y)
+	p := dstPos.xy - imageDstOrigin()
+	return vec2(p.x, Resolution.y-p.y)
 }
 
 // pixelAngle is Camera.PixelAngle.
