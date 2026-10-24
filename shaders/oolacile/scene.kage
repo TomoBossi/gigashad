@@ -274,7 +274,6 @@ func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 
 	tz := smoothstep(0, 0.15, trap.z)
 	tx := smoothstep(0, 0.4, trap.x)
 	base := mix(mix(deep, teal, tz), moss, 0.5*(1-tx))
-	emit := exp(-trap.y*trap.y*4000) * 1.5
 
 	diff := max(0, dot(n, lightDir))
 	head := max(0, -dot(n, dir))
@@ -282,7 +281,6 @@ func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 
 
 	col := base * (0.25 + 0.6*diff + 0.4*head) * ao
 	col += vec3(0.3 * spec * ao)
-	col += cyan * emit
 	col += cyan * (0.15 * glow)
 	return col
 }

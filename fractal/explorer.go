@@ -63,6 +63,8 @@ type Explorer struct {
 	StepMul float64
 	// PixelLOD multiplies the pixel footprint used as the far hit threshold.
 	PixelLOD float64
+	// StepFog, if set, adds Mandelbulb3D-style dynamic fog (see StepFog).
+	StepFog *StepFog
 	// Warp, if set, deforms space smoothly over time (see Warp).
 	Warp *Warp
 
@@ -187,23 +189,33 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	ro := cam.Pos
 	s := cam.Scale
 	minEps := e.Detail * s
-	cone := cam.PixelAngle(f.Res) * e.PixelLOD
+	cone := cam.PixelAngle(f.LODRes()) * e.PixelLOD
 	maxT := e.ViewDist * s
 	level := e.level(s)
 	sp := e.space(s)
 
 	t := 0.0
 	glow := 0.0
+	count := 0.0 // StepFog's
 	hit := false
 	var d, eps float64
 	var trap shad.Vec4
 	steps := 0
+	prevD, prevStep := 0.0, 0.0
+	fogFloor := 0.0
+	if e.StepFog != nil {
+		fogFloor = e.StepFog.Floor * s
+	}
 	for steps < e.Steps {
 		steps++
 		eps = math.Max(minEps, t*cone)
 		d, trap = sp.de(ro.Add(rd.Mul(t)), e.F.Iters(eps), level)
+		if steps > 1 {
+			count += stepCount(prevStep, math.Max(prevD, fogFloor), math.Max(d, fogFloor))
+		}
 		if d < eps {
 			hit = true
+			count += approach(d, fogFloor)
 			break
 		}
 		// Hits and draw decisions use the unscaled estimate, as without the
@@ -211,6 +223,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 		step := d * e.StepMul * sp.scale
 		glow += glowAlong(step, d, eps)
 		t += step
+		prevD, prevStep = d, step
 		if t > maxT {
 			break
 		}
@@ -239,6 +252,9 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 		AO: e.ao(&sp, p, n, eps, iters, level), Steps: steps, Glow: glowLevel(glow),
 	}
 	col := e.Material(&h, f)
+	if e.StepFog != nil {
+		col = col.Add(e.StepFog.color(count, t/s))
+	}
 	out.Color = col.Mix(bg, fade)
 	out.Depth = t
 	out.Pos = p

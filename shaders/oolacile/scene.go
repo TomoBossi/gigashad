@@ -116,6 +116,7 @@ func newExplorer() *fractal.Explorer {
 		GPUFastMinScale: 5e-5,
 		Fog:             shad.V3(0.01, 0.035, 0.04),
 	}
+	e.StepFog = &stepFog
 	e.Material = material
 	e.Background = func(dir shad.Vec3, glow float64, fr *shad.Frame) shad.Vec3 {
 		return e.Fog.Add(shad.V3(0.1, 0.6, 0.7).Mul(glow * glow * 0.6))
@@ -147,8 +148,6 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 	tx := shad.Smoothstep(0, 0.4, h.Trap.X)
 	base := deep.Mix(teal, tz).Mix(moss, 0.5*(1-tx))
 
-	// Emissive strips where the trap almost touches the y plane.
-	emit := math.Exp(-h.Trap.Y*h.Trap.Y*4000) * 1.5
 
 	n := h.Normal
 	diff := math.Max(0, n.Dot(lightDir))
@@ -157,7 +156,23 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 
 	col := base.Mul(0.25 + 0.6*diff + 0.4*head).Mul(h.AO)
 	col = col.Add(shad.S3(0.3 * spec * h.AO))
-	col = col.Add(cyan.Mul(emit))
 	col = col.Add(cyan.Mul(0.15 * h.Glow))
 	return col
+}
+
+// stepFog is the scene file's dynamic fog: a fog color of RGB 23/203/255 and
+// a white second color (not squared: the file leaves that option off), its
+// slider positions (fog offset 104, amount 85) turned into a count threshold
+// and gain, and a depth term from the fog's Z offset, in observer sizes of
+// the scene's own 0.002. Our distance estimates and step counts don't match
+// Mandelbulb3D's exactly, so gain and threshold are calibrated against the
+// original render.
+var stepFog = fractal.StepFog{
+	Color:      shad.V3(23, 203, 255).Div(255),
+	Dense:      shad.V3(1, 1, 1),
+	Threshold:  1.2 * (137 - math.Sqrt(104)*11.313708) * (2.2 / 0.1) * 0.28,
+	DepthSlope: (2.2 / 0.1) * 0.7 / (181.788224833822 + 0.995421852006086) * (128 - 11.313708) * 0.002,
+	Gain:       0.35 * (85 - 53) * 0.1 * 0.00065,
+	DenseRate:  0.1 * 0.015,
+	Floor:      shad.DetailPerScale,
 }

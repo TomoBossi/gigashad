@@ -39,11 +39,16 @@ type Field interface {
 // Frame holds the uniforms of one frame plus a read-only view of the previous
 // frame's G-buffer.
 type Frame struct {
-	Time    float64 // seconds since start (iTime)
-	Delta   float64 // seconds since the previous frame (iTimeDelta)
-	Index   int     // frame number (iFrame)
-	Res     Vec2    // render resolution in pixels (iResolution.xy)
-	Cam     Camera  // the view; Def.Update sets it
+	Time  float64 // seconds since start (iTime)
+	Delta float64 // seconds since the previous frame (iTimeDelta)
+	Index int     // frame number (iFrame)
+	Res   Vec2    // render resolution in pixels (iResolution.xy)
+	// LOD is the resolution to choose level of detail from (hit thresholds,
+	// iteration counts, anything sized by the pixel footprint). The app
+	// moves it slowly toward Res, so when dynamic resolution steps, detail
+	// drifts gradually instead of jumping. Zero means Res.
+	LOD     Vec2
+	Cam     Camera // the view; Def.Update sets it
 	Sliders [4]float64
 	Prev    *GBuffer // previous frame's samples; nil on the first frame
 
@@ -71,6 +76,14 @@ func (c *Camera) Ray(frag, res Vec2) Vec3 {
 // detail (a hit is "close enough" once the distance is below t*PixelAngle).
 func (c *Camera) PixelAngle(res Vec2) float64 {
 	return math.Tan(c.FovY/2) * 2 / res.Y
+}
+
+// LODRes returns f.LOD, or f.Res if it isn't set.
+func (f *Frame) LODRes() Vec2 {
+	if f.LOD.Y > 0 {
+		return f.LOD
+	}
+	return f.Res
 }
 
 // GBuffer is a frame worth of samples, row 0 at the bottom.

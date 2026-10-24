@@ -92,14 +92,40 @@ func aoAt(q vec3, n vec3, eps float, iters float) float {
 	return clamp(1-occ*0.8, 0, 1)
 }
 
+// StepFog (FogOn is 0 without it).
+var FogOn float
+var FogColor vec3
+var FogDense vec3
+var FogThreshold float
+var FogDepthSlope float
+var FogGain float
+var FogDenseRate float
+var FogFloor float
+
+// stepCount is StepFog's count over a step from distance d0 to d1.
+func stepCount(step, d0, d1 float) float {
+	d0 = max(d0, 1e-30)
+	d1 = max(d1, 1e-30)
+	dm := d0
+	r := d0 / d1
+	if abs(r-1) > 1e-4 {
+		dm = (d0 - d1) / log(r)
+	}
+	return 10 * step / dm
+}
+
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	rd := camRay(fragCoord(dstPos))
 	minEps := Detail * CamScale
-	cone := pixelAngle() * PixelLOD
+	cone := lodPixelAngle() * PixelLOD
 	maxT := ViewDist * CamScale
 
 	t := 0.0
 	glow := 0.0
+	count := 0.0
+	prevD := 0.0
+	prevStep := 0.0
+	fogFloor := FogFloor * CamScale // see StepFog.Floor
 	hit := false
 	eps := minEps
 	d := 0.0
@@ -112,14 +138,22 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		steps += 1
 		eps = max(minEps, t*cone)
 		d, trap = deAt(rd*t, itersFor(eps), eps)
+		if steps > 1 {
+			count += stepCount(prevStep, max(prevD, fogFloor), max(d, fogFloor))
+		}
 		if d < eps {
 			hit = true
+			if d > fogFloor && fogFloor > 0 {
+				count += 10 * log(d/fogFloor) // the rest of the approach, see approach
+			}
 			break
 		}
 		step := d * StepMul * WarpScale // see Explorer.Fragment
 		x := d / eps
 		glow += step / eps / (1 + x*x) // see glowAlong
 		t += step
+		prevD = d
+		prevStep = step
 		if t > maxT {
 			break
 		}
@@ -138,6 +172,11 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	iters := itersFor(eps)
 	n := normalAt(q, eps, iters)
 	col := material(CamPos+q, n, rd, trap, aoAt(q, n, eps, iters), glow)
+	if FogOn != 0 {
+		fog := clamp((count-FogThreshold-FogDepthSlope*t/CamScale)*FogGain, 0, 1)
+		dense := clamp(min(1, count*FogDenseRate)*fog, 0, 1)
+		col += FogColor*(fog-dense) + FogDense*dense
+	}
 	return vec4(mix(col, bg, fade), 1)
 }
 `
@@ -164,6 +203,7 @@ func (e *Explorer) uniforms(f *shad.Frame, u map[string]any) {
 	u["Level"] = float32(e.level(f.Cam.Scale))
 	u["Fog"] = shad.Vec3f(e.Fog)
 	e.Warp.uniforms(f.Cam.Pos, f.Cam.Scale, u)
+	e.StepFog.uniforms(u)
 	if e.GPUUniforms != nil {
 		e.GPUUniforms(f, u)
 	}

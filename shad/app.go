@@ -65,11 +65,16 @@ type App struct {
 	quit    bool
 	lastCam Camera
 	lastW   int
+	lodW    float64 // Frame.LOD width, trailing the render width
 	lastH   int
 	took    time.Duration // render time of the last frame
 }
 
 var errQuit = errors.New("quit")
+
+// lodSmoothing is the time constant, in seconds, with which the level of
+// detail follows the render resolution.
+const lodSmoothing = 2.0
 
 // NewApp prepares an App for def; Run opens the window.
 func NewApp(def *Def, opt Options) (*App, error) {
@@ -186,6 +191,15 @@ func (a *App) Update() error {
 	}
 	w := res.width()
 	h := max(1, int(math.Round(float64(w)/a.aspect())))
+	// Level of detail follows the render width, but slowly (see Frame.LOD):
+	// a smaller render still gets cheaper pixels, while a resize turns into a
+	// gradual drift of detail instead of a jump in lighting and structure.
+	if a.lodW == 0 || a.opt.ShotPath != "" || a.opt.Bench > 0 {
+		a.lodW = float64(w)
+	} else {
+		a.lodW += (float64(w) - a.lodW) * (1 - math.Exp(-dt/lodSmoothing))
+	}
+	f.LOD = Vec2{a.lodW, a.lodW / a.aspect()}
 	if a.opt.Bench > 0 {
 		return a.bench(f, gpu, w, h)
 	}

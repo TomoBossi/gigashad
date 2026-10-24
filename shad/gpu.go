@@ -16,6 +16,7 @@ package main
 
 var Time float
 var Resolution vec2
+var LOD vec2 // Frame.LODRes()
 var CamPos vec3
 var CamPosLo vec3 // CamPos + CamPosLo is the camera position to ~48 bits
 var CamRight vec3
@@ -33,6 +34,11 @@ func fragCoord(dstPos vec4) vec2 {
 // pixelAngle is Camera.PixelAngle.
 func pixelAngle() float {
 	return tan(CamFovY/2) * 2 / Resolution.y
+}
+
+// lodPixelAngle is pixelAngle at the LOD resolution (see Frame.LOD).
+func lodPixelAngle() float {
+	return tan(CamFovY/2) * 2 / LOD.y
 }
 
 // camRay is Camera.Ray.
@@ -178,6 +184,8 @@ func (g *gpuRenderer) render(f *Frame) {
 	c := &f.Cam
 	u["Time"] = float32(f.Time)
 	u["Resolution"] = []float32{float32(w), float32(h)}
+	lod := f.LODRes()
+	u["LOD"] = []float32{float32(lod.X), float32(lod.Y)}
 	u["CamPos"] = Vec3f(c.Pos)
 	u["CamPosLo"] = Vec3fLo(c.Pos)
 	u["CamRight"] = Vec3f(c.Right)
