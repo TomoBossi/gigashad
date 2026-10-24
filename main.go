@@ -25,7 +25,7 @@ var shaders = map[string]func(shad.Flags) func() shad.Def{
 }
 
 func main() {
-	name := flag.String("shader", "oolacile", "shader to run: "+strings.Join(names(), ", "))
+	name := flag.String("shader", "", "shader to run (required): "+strings.Join(names(), ", "))
 	backend := flag.String("backend", "auto", "where to render: auto (the shader decides), cpu or gpu")
 	width := flag.Int("width", 0, "fixed render width in pixels; 0 adjusts it every frame to hold -fps")
 	ar := flag.String("ar", "auto", "aspect ratio as w:h, or auto to follow the window (and the monitor when fullscreen)")
@@ -42,6 +42,9 @@ func main() {
 	}
 	flag.Parse()
 
+	if *name == "" {
+		fail("pick a shader with -shader: %s", strings.Join(names(), ", "))
+	}
 	mk, ok := constructors[*name]
 	if !ok {
 		fail("unknown shader %q; have: %s", *name, strings.Join(names(), ", "))
