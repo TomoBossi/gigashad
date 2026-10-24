@@ -35,20 +35,29 @@ type scene struct {
 type Options struct {
 	Breath      float64 // how much the fractal breathes; 0 holds it still
 	BreathSpeed float64 // how fast; 1 is the default pace
+	Glow        float64 // strength of the dynamic fog glow; 0 turns it off
 }
 
-func DefaultOptions() Options { return Options{Breath: 1, BreathSpeed: 1} }
+func DefaultOptions() Options { return Options{Breath: 1, BreathSpeed: 1, Glow: 1} }
 
 // Register declares Neo Oolacile's flags and returns its constructor.
 func Register(fl shad.Flags) func() shad.Def {
 	d := DefaultOptions()
 	breath := fl.Float64("breath", d.Breath, "how much the fractal breathes; 0 holds it still")
 	speed := fl.Float64("breathspeed", d.BreathSpeed, "breathing pace; 1 is the default, 2 twice as fast")
-	return func() shad.Def { return New(Options{Breath: *breath, BreathSpeed: *speed}) }
+	glow := fl.Float64("glow", d.Glow, "strength of the glow; 0 turns it off")
+	return func() shad.Def { return New(Options{Breath: *breath, BreathSpeed: *speed, Glow: *glow}) }
 }
 
 func New(opt Options) shad.Def {
 	s := &scene{e: newExplorer(), opt: opt}
+	if opt.Glow == 0 {
+		s.e.StepFog = nil
+	} else {
+		sf := stepFog
+		sf.Gain *= opt.Glow
+		s.e.StepFog = &sf
+	}
 	s.f = s.e.F.(*MixPinski)
 	// Breathing: a smooth deformation of space at scales 8-128 observer sizes,
 	// which sways the fractal without changing its shape's topology.
