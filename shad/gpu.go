@@ -182,9 +182,15 @@ func (g *gpuRenderer) resize(w, h int) bool {
 func (g *gpuRenderer) renderTimed(f *Frame) time.Duration {
 	t0 := time.Now()
 	g.render(f)
-	var px [4]byte
-	g.img.SubImage(image.Rect(0, 0, 1, 1)).(*ebiten.Image).ReadPixels(px[:])
+	syncGPU(g.img)
 	return time.Since(t0)
+}
+
+// syncGPU waits until everything drawn into img so far is done, by reading
+// one pixel back.
+func syncGPU(img *ebiten.Image) {
+	var px [4]byte
+	img.SubImage(image.Rect(0, 0, 1, 1)).(*ebiten.Image).ReadPixels(px[:])
 }
 
 func (g *gpuRenderer) render(f *Frame) {

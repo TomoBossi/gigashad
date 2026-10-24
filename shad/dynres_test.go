@@ -14,7 +14,7 @@ func TestResControllerHoldsBudget(t *testing.T) {
 	run := func(frames int) (int, float64) {
 		var took float64
 		for range frames {
-			w := c.width()
+			w := c.width(true)
 			h := float64(w) * 9 / 16
 			took = float64(w) * h * costPerPixel
 			c.observe(took)
@@ -39,5 +39,62 @@ func TestResControllerHoldsBudget(t *testing.T) {
 	costPerPixel /= 1000 // trivially cheap: clamps at the maximum
 	if w3, _ := run(200); w3 != 640 {
 		t.Errorf("cheap scene: width %d, want the 640 maximum", w3)
+	}
+}
+
+// A sudden jump in cost (an expensive region coming into view) is absorbed
+// within a couple of frames, and the size doesn't jitter with timing noise.
+func TestResControllerReactsFast(t *testing.T) {
+	const budget = 1.0 / 30
+	c := newResController(400, 96, 640, budget)
+	costPerPixel := 0.9 * budget / (400 * 225)
+	frame := func(noise float64) float64 {
+		w := c.width(true)
+		took := float64(w) * float64(w) * 9 / 16 * costPerPixel * noise
+		c.observe(took)
+		return took
+	}
+	for i := range 100 {
+		frame(1 + 0.08*math.Sin(float64(i)*1.7)) // ±8% noise
+	}
+	sizes := map[int]bool{}
+	for i := range 100 {
+		frame(1 + 0.08*math.Sin(float64(i)*1.7))
+		sizes[c.cur] = true
+	}
+	if len(sizes) > 1 {
+		t.Errorf("with timing noise only, the width took %d different values", len(sizes))
+	}
+
+	costPerPixel *= 3
+	var over int
+	for i := range 30 {
+		if took := frame(1); took > budget*1.15 && i >= resOverFrames+1 {
+			over++
+		}
+	}
+	if over > 0 {
+		t.Errorf("after a 3x cost jump, %d frames were still over budget once it reacted", over)
+	}
+}
+
+// Occasional one-frame spikes (a GC pause, saving a screenshot) don't
+// ratchet the width down, even when the camera mostly sits still (when the
+// width may shrink but not grow): it stays near what the steady cost allows.
+func TestResControllerIgnoresSpikes(t *testing.T) {
+	const budget = 1.0 / 30
+	c := newResController(400, 96, 640, budget)
+	costPerPixel := budget / (400 * 225) // 400 wide fits exactly
+	for i := range 3000 {
+		moving := i%300 < 30 // a second of movement every ten
+		w := c.width(moving)
+		took := float64(w) * float64(w) * 9 / 16 * costPerPixel
+		if i%40 == 0 {
+			took *= 4 // a hiccup
+		}
+		c.observe(took)
+	}
+	if c.cur < 360 {
+		t.Errorf("after occasional spikes the width fell to %d; the steady cost allows 400", c.cur)
 	}
 }

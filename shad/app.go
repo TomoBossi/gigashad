@@ -103,7 +103,9 @@ func NewApp(def *Def, opt Options) (*App, error) {
 		}
 		a.post = fx
 	}
-	budget := 0.85 / float64(opt.FPS)
+	// Leave a quarter of each frame for everything else (input, Update,
+	// collisions, presenting).
+	budget := 0.75 / float64(opt.FPS)
 	a.cpuRes = newResController(DefaultCPUWidth, 96, 640, budget)
 	a.gpuRes = newResController(DefaultGPUWidth, 160, 3840, budget)
 	if opt.Width > 0 {
@@ -198,7 +200,8 @@ func (a *App) Update() error {
 			res.setMax(int(hi))
 		}
 	}
-	w := res.width()
+	moving := f.Index == 0 || f.Cam != a.lastCam
+	w := res.width(moving)
 	h := max(1, int(math.Round(float64(w)/a.aspect())))
 	// Level of detail follows the render width, but slowly (see Frame.LOD):
 	// a smaller render still gets cheaper pixels, while a resize turns into a
@@ -219,26 +222,29 @@ func (a *App) Update() error {
 	a.lastCam, a.lastW, a.lastH = f.Cam, w, h
 	a.onGPU = gpu
 
-	var took time.Duration
+	// Time the whole frame, render and post, waiting for the GPU to finish.
+	t0 := time.Now()
 	var resized bool
 	if gpu {
 		resized = a.gpu.resize(w, h)
-		took = a.gpu.renderTimed(f)
+		a.gpu.render(f)
 	} else {
 		resized = a.resizeCPU(w, h)
 		a.renderer.Reuse = 1
 		if a.static() {
 			a.renderer.Reuse = a.opt.Reuse
 		}
-		t0 := time.Now()
 		a.renderer.Render(a.def.CPU, f)
-		took = time.Since(t0)
 		a.img.WritePixels(a.renderer.RGBA)
 	}
 	a.final = a.current()
 	if a.post != nil {
 		a.final = a.post.apply(a.final)
 	}
+	if gpu || a.post != nil {
+		syncGPU(a.final)
+	}
+	took := time.Since(t0)
 	// The first frame at a new size has nothing to reuse and isn't typical.
 	if !resized {
 		res.observe(took.Seconds())
