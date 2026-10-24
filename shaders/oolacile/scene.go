@@ -50,6 +50,9 @@ func Register(fl shad.Flags) func() shad.Def {
 func New(opt Options) shad.Def {
 	s := &scene{e: newExplorer(), opt: opt}
 	s.f = s.e.F.(*MixPinski)
+	// Breathing: a smooth deformation of space at scales 2-64 observer sizes,
+	// which sways the fractal without changing its shape's topology.
+	s.e.Warp = &fractal.Warp{Amp: 0.012 * opt.Breath, Speed: opt.BreathSpeed, MinRatio: 2, MaxRatio: 64}
 	s.fly.Keys = keys()
 	s.reset(0)
 	d := s.e.Def()
@@ -83,28 +86,13 @@ func (s *scene) update(c *shad.Context) {
 	s.breathe(c.Frame.Time - s.t0)
 }
 
-// breathe sets the formula's animated offsets for time t: each a mix of two
-// slow sines with unrelated periods, so the motion never quite repeats.
+// breathe advances the warp to time t (seconds since the last reset).
 func (s *scene) breathe(t float64) {
 	s.now = t
-	t *= s.opt.BreathSpeed
-	a := s.opt.Breath
-	wave := func(p1, ph1, p2, ph2 float64) float64 {
-		return 0.65*math.Sin(2*math.Pi*t/p1+ph1) + 0.35*math.Sin(2*math.Pi*t/p2+ph2)
-	}
-	s.f.Breath = shad.V4(
-		0.006*wave(13.1, 0, 7.3, 1.7),
-		0.006*wave(11.7, 0.9, 5.9, 2.3),
-		0.004*wave(17.3, 0.4, 6.7, 3.1),
-		0.004*wave(15.1, 2.2, 8.9, 0.6),
-	).Mul(a)
-	s.f.SinBreath = 0.015 * a * wave(19.1, 1.1, 8.3, 0)
+	s.e.Warp.Time = t
 }
 
 func (s *scene) uniforms(f *shad.Frame, u map[string]any) {
-	b := s.f.Breath
-	u["Breath"] = []float32{float32(b.X), float32(b.Y), float32(b.Z), float32(b.W)}
-	u["SinBreath"] = float32(s.f.SinBreath)
 }
 
 func (s *scene) data(c *shad.Context) string {

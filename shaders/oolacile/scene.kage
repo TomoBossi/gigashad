@@ -11,12 +11,6 @@ const maxIters = 160
 const maxItersF = 160.0
 const trapIters = 10
 const trapLead = 17.931568569324174 // MixPinski.TrapLead
-const breathLead = 9.813781191217037 // MixPinski.BreathLead
-const breathRamp = 4.0
-
-// Set every frame from MixPinski.Breath and SinBreath.
-var Breath vec4
-var SinBreath float
 
 func itersFor(eps float) float {
 	return clamp(4+log(1/eps)/log(sqrt(2.0)), 1, maxItersF)
@@ -101,10 +95,9 @@ func trapsAdd(i int, ta int, v vec4, early vec4, trapA vec4, trapB vec4, inA int
 }
 
 // de mirrors MixPinski.DE: whole pairs of iterations, blending the estimate
-// after the last whole pair with the one after the next, trap windows a pair
-// apart, and breathing from breathLead iterations before the observer's
-// level. The first dfIters(eps) iterations run in double-float. (s-1)/s·cs.z
-// is cs.z/2 with s = 2.
+// after the last whole pair with the one after the next, and trap windows a
+// pair apart. The first dfIters(eps) iterations run in double-float.
+// (s-1)/s·cs.z is cs.z/2 with s = 2.
 func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 	deriv := 1.0
 	r2 := dot(ph, ph)
@@ -113,7 +106,6 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 	n := int(pairs) * 2
 	frac := fract(pairs)
 	tp := max(0, level-trapLead) / 2
-	breathFrom := level - breathLead - breathRamp
 	ta := int(tp) * 2
 	tfrac := fract(tp)
 	end := min(n+2, maxIters)
@@ -140,8 +132,7 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 		if i == n {
 			d0 = sqrt(r2) / deriv
 		}
-		b := smoothstep(breathFrom, breathFrom+breathRamp, float(i))
-		cs := vec4(cscaleX, cscaleY, cscaleZ, cscaleW) + Breath*b
+		cs := vec4(cscaleX, cscaleY, cscaleZ, cscaleW)
 		if (i/2)*2 == i {
 			kb := cs.z / 2
 			T := vec2(0)
@@ -183,7 +174,7 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 			Y = NY
 			deriv *= 2
 		} else {
-			W = dfSinApprox(dfAdd(dfAdd(W, vec2(sinOffHi, sinOffLo)), vec2(-SinBreath*b, 0)))
+			W = dfSinApprox(dfAdd(W, vec2(sinOffHi, sinOffLo)))
 		}
 		r2 = X.x*X.x + Y.x*Y.x + Z.x*Z.x + W.x*W.x
 		early, trapA, trapB, inA, inB = trapsAdd(i, ta, vec4(abs(X.x), abs(Y.x), abs(Z.x), r2), early, trapA, trapB, inA, inB)
@@ -206,8 +197,7 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 		if i == n {
 			d0 = sqrt(r2) / deriv
 		}
-		b := smoothstep(breathFrom, breathFrom+breathRamp, float(i))
-		cs := vec4(cscaleX, cscaleY, cscaleZ, cscaleW) + Breath*b
+		cs := vec4(cscaleX, cscaleY, cscaleZ, cscaleW)
 		if (i/2)*2 == i {
 			kb := cs.z / 2
 			// Sierpinski folds over all six coordinate pairs.
@@ -251,7 +241,7 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 			y = ny
 			deriv *= 2
 		} else {
-			w = sinApprox(w - sinOffset - SinBreath*b)
+			w = sinApprox(w - sinOffset)
 		}
 		r2 = x*x + y*y + z*z + w*w
 		early, trapA, trapB, inA, inB = trapsAdd(i, ta, vec4(abs(x), abs(y), abs(z), r2), early, trapA, trapB, inA, inB)

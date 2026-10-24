@@ -33,30 +33,61 @@ var PixelLOD float
 var Level float
 var Fog vec3
 
-func normalAt(ph, pl vec3, eps float, iters float) vec3 {
+// Warp: octave wavelengths, amplitudes (0 when unused), phases relative to
+// the camera, the three waves' directions, and the distance scale that
+// keeps estimates safe.
+var WarpLambda [6]float
+var WarpAmp [6]float
+var WarpPhase [18]float
+var WarpDir0 vec3
+var WarpDir1 vec3
+var WarpDir2 vec3
+var WarpDisp0 vec3
+var WarpDisp1 vec3
+var WarpDisp2 vec3
+var WarpScale float
+
+// warpAt is Warp.displace at q, relative to the camera.
+func warpAt(q vec3) vec3 {
+	d := vec3(0)
+	for i := 0; i < 6; i++ {
+		a := WarpAmp[i]
+		if a == 0 {
+			continue
+		}
+		k := 2 * 3.14159265358979 / WarpLambda[i]
+		d += WarpDisp0 * (a * sin(k*dot(WarpDir0, q)+WarpPhase[3*i]))
+		d += WarpDisp1 * (a * sin(k*dot(WarpDir1, q)+WarpPhase[3*i+1]))
+		d += WarpDisp2 * (a * sin(k*dot(WarpDir2, q)+WarpPhase[3*i+2]))
+	}
+	return d
+}
+
+// deAt estimates the distance at q, relative to the camera, in warped space.
+func deAt(q vec3, iters float, eps float) (float, vec4) {
+	ph, pl := dfAdd3(CamPos, CamPosLo, q+warpAt(q), vec3(0))
+	d, trap := de(ph, pl, iters, Level, eps)
+	return d * WarpScale, trap
+}
+
+func normalAt(q vec3, eps float, iters float) vec3 {
 	h := eps * 0.5
 	a := vec3(1, -1, -1)
 	b := vec3(-1, -1, 1)
 	c := vec3(-1, 1, -1)
 	e := vec3(1, 1, 1)
-	qh, ql := dfAdd3(ph, pl, a*h, vec3(0))
-	da, _ := de(qh, ql, iters, Level, eps)
-	qh, ql = dfAdd3(ph, pl, b*h, vec3(0))
-	db, _ := de(qh, ql, iters, Level, eps)
-	qh, ql = dfAdd3(ph, pl, c*h, vec3(0))
-	dc, _ := de(qh, ql, iters, Level, eps)
-	qh, ql = dfAdd3(ph, pl, e*h, vec3(0))
-	dd, _ := de(qh, ql, iters, Level, eps)
+	da, _ := deAt(q+a*h, iters, eps)
+	db, _ := deAt(q+b*h, iters, eps)
+	dc, _ := deAt(q+c*h, iters, eps)
+	dd, _ := deAt(q+e*h, iters, eps)
 	return normalize(a*da + b*db + c*dc + e*dd)
 }
 
-func aoAt(ph, pl vec3, n vec3, eps float, iters float) float {
+func aoAt(q vec3, n vec3, eps float, iters float) float {
 	h1 := eps * 4
 	h2 := eps * 24
-	qh, ql := dfAdd3(ph, pl, n*h1, vec3(0))
-	d1, _ := de(qh, ql, iters, Level, eps)
-	qh, ql = dfAdd3(ph, pl, n*h2, vec3(0))
-	d2, _ := de(qh, ql, iters, Level, eps)
+	d1, _ := deAt(q+n*h1, iters, eps)
+	d2, _ := deAt(q+n*h2, iters, eps)
 	occ := max(0, h1-d1)/h1 + 0.5*max(0, h2-d2)/h2
 	return clamp(1-occ*0.8, 0, 1)
 }
@@ -80,8 +111,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		}
 		steps += 1
 		eps = max(minEps, t*cone)
-		ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
-		d, trap = de(ph, pl, itersFor(eps), Level, eps)
+		d, trap = deAt(rd*t, itersFor(eps), eps)
 		if d < eps {
 			hit = true
 			break
@@ -104,10 +134,10 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		}
 		return vec4(bg, 1)
 	}
-	ph, pl := dfAdd3(CamPos, CamPosLo, rd*t, vec3(0))
+	q := rd * t
 	iters := itersFor(eps)
-	n := normalAt(ph, pl, eps, iters)
-	col := material(ph, n, rd, trap, aoAt(ph, pl, n, eps, iters), glow)
+	n := normalAt(q, eps, iters)
+	col := material(CamPos+q, n, rd, trap, aoAt(q, n, eps, iters), glow)
 	return vec4(mix(col, bg, fade), 1)
 }
 `
@@ -133,6 +163,7 @@ func (e *Explorer) uniforms(f *shad.Frame, u map[string]any) {
 	u["PixelLOD"] = float32(e.PixelLOD)
 	u["Level"] = float32(e.level(f.Cam.Scale))
 	u["Fog"] = shad.Vec3f(e.Fog)
+	e.Warp.uniforms(f.Cam.Pos, f.Cam.Scale, u)
 	if e.GPUUniforms != nil {
 		e.GPUUniforms(f, u)
 	}

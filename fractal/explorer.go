@@ -63,6 +63,9 @@ type Explorer struct {
 	StepMul float64
 	// PixelLOD multiplies the pixel footprint used as the far hit threshold.
 	PixelLOD float64
+	// Warp, if set, deforms space smoothly over time (see Warp).
+	Warp *Warp
+
 	// GPUUniforms fills in the GPU formula's own uniforms, if it has any.
 	GPUUniforms func(f *shad.Frame, u map[string]any)
 
@@ -105,9 +108,10 @@ func (e *Explorer) Def() shad.Def {
 // Dist implements shad.Field.
 func (e *Explorer) Dist(p shad.Vec3, detail float64) float64 {
 	s := detail / shad.DetailPerScale
+	sp := e.space(s)
 	iters, level := e.F.Iters(detail), e.level(s)
 	de := func(q shad.Vec3) float64 {
-		d, _ := e.F.DE(q, iters, level)
+		d, _ := sp.de(q, iters, level)
 		return d
 	}
 	d := de(p)
@@ -151,6 +155,32 @@ const (
 	confirmSteps = 32
 )
 
+// space evaluates the formula in space as Warp deforms it for an observer of
+// size s.
+type space struct {
+	e     *Explorer
+	oct   [warpOctaves]octave
+	n     int
+	scale float64 // keeps distance estimates safe under the deformation
+}
+
+func (e *Explorer) space(s float64) space {
+	sp := space{e: e, scale: 1}
+	if e.Warp.active() {
+		sp.oct, sp.n = e.Warp.octaves(s)
+		sp.scale = 1 / (1 + e.Warp.slope(&sp.oct, sp.n))
+	}
+	return sp
+}
+
+func (sp *space) de(p shad.Vec3, iters, level float64) (float64, shad.Vec4) {
+	if sp.n > 0 {
+		p = p.Add(sp.e.Warp.displace(p, &sp.oct, sp.n))
+	}
+	d, trap := sp.e.F.DE(p, iters, level)
+	return d * sp.scale, trap
+}
+
 func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	cam := &f.Cam
 	rd := cam.Ray(frag, f.Res)
@@ -160,6 +190,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	cone := cam.PixelAngle(f.Res) * e.PixelLOD
 	maxT := e.ViewDist * s
 	level := e.level(s)
+	sp := e.space(s)
 
 	t := 0.0
 	glow := 0.0
@@ -170,7 +201,7 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	for steps < e.Steps {
 		steps++
 		eps = math.Max(minEps, t*cone)
-		d, trap = e.F.DE(ro.Add(rd.Mul(t)), e.F.Iters(eps), level)
+		d, trap = sp.de(ro.Add(rd.Mul(t)), e.F.Iters(eps), level)
 		if d < eps {
 			hit = true
 			break
@@ -200,10 +231,10 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 
 	p := ro.Add(rd.Mul(t))
 	iters := e.F.Iters(eps)
-	n := e.normal(p, eps, iters, level)
+	n := e.normal(&sp, p, eps, iters, level)
 	h := Hit{
 		Pos: p, Normal: n, Dir: rd, T: t, TRel: t / s, Trap: trap,
-		AO: e.ao(p, n, eps, iters, level), Steps: steps, Glow: glowLevel(glow),
+		AO: e.ao(&sp, p, n, eps, iters, level), Steps: steps, Glow: glowLevel(glow),
 	}
 	col := e.Material(&h, f)
 	out.Color = col.Mix(bg, fade)
@@ -234,12 +265,12 @@ func glowLevel(g float64) float64 {
 }
 
 // normal uses the tetrahedron technique: four DE samples instead of six.
-func (e *Explorer) normal(p shad.Vec3, eps, iters, level float64) shad.Vec3 {
+func (e *Explorer) normal(sp *space, p shad.Vec3, eps, iters, level float64) shad.Vec3 {
 	h := eps * 0.5
 	k := [4]shad.Vec3{shad.V3(1, -1, -1), shad.V3(-1, -1, 1), shad.V3(-1, 1, -1), shad.V3(1, 1, 1)}
 	var n shad.Vec3
 	for _, v := range k {
-		d, _ := e.F.DE(p.Add(v.Mul(h)), iters, level)
+		d, _ := sp.de(p.Add(v.Mul(h)), iters, level)
 		n = n.Add(v.Mul(d))
 	}
 	return n.Norm()
@@ -247,12 +278,12 @@ func (e *Explorer) normal(p shad.Vec3, eps, iters, level float64) shad.Vec3 {
 
 // ao compares the DE a few hit-thresholds out along the normal with the
 // distance actually travelled: occluded points see the surface sooner.
-func (e *Explorer) ao(p, n shad.Vec3, eps, iters, level float64) float64 {
+func (e *Explorer) ao(sp *space, p, n shad.Vec3, eps, iters, level float64) float64 {
 	occ := 0.0
 	w := 1.0
 	for _, k := range [2]float64{4, 24} {
 		h := eps * k
-		d, _ := e.F.DE(p.Add(n.Mul(h)), iters, level)
+		d, _ := sp.de(p.Add(n.Mul(h)), iters, level)
 		occ += w * math.Max(0, h-d) / h
 		w *= 0.5
 	}

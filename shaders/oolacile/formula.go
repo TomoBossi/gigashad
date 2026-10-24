@@ -26,15 +26,6 @@ type MixPinski struct {
 	// trap starts (never before the first): the coloring describes structure
 	// that much larger than the observer.
 	TrapLead float64
-	// Breath is added to CScale, and SinBreath to SinOffset, from
-	// BreathLead iterations before the observer's level on, ramping in over
-	// BreathRamp iterations: structure that much larger than the observer
-	// and smaller animates, coarser structure stays put, so the animation
-	// looks the same at any scale. Set them every frame.
-	Breath     shad.Vec4
-	SinBreath  float64
-	BreathLead float64
-	BreathRamp float64
 
 	rotated bool // Rot is not the identity
 }
@@ -50,9 +41,7 @@ func NeoOolacile() *MixPinski {
 		MaxIters:       240,
 		BailoutSquared: 1024,
 		// The coloring the scene was designed with, at its original size.
-		TrapLead:   2 * math.Log2(1/0.002),
-		BreathLead: 2 * math.Log2(30),
-		BreathRamp: 4,
+		TrapLead: 2 * math.Log2(1/0.002),
 	}
 	m.Prepare()
 	return m
@@ -90,7 +79,6 @@ func (m *MixPinski) DE(p shad.Vec3, iters, level float64) (float64, shad.Vec4) {
 	tp := math.Max(0, level-m.TrapLead) / 2
 	ta := int(tp) * 2 // first trap window; the second starts a pair later
 	tfrac := tp - math.Floor(tp)
-	breathFrom := level - m.BreathLead - m.BreathRamp
 
 	// early is the trap over the first iterations, used instead when p
 	// escapes before reaching the windows.
@@ -102,16 +90,11 @@ func (m *MixPinski) DE(p shad.Vec3, iters, level float64) (float64, shad.Vec4) {
 		if i == n {
 			d0 = math.Sqrt(r2) / deriv
 		}
-		b := m.breath(float64(i), breathFrom)
 		if i&1 == 0 {
-			cs := m.CScale
-			if b > 0 {
-				cs = cs.Add(m.Breath.Mul(b))
-			}
-			x, y, z, w = m.mixPinski(x, y, z, w, cs)
+			x, y, z, w = m.mixPinski(x, y, z, w)
 			deriv *= m.Scale
 		} else {
-			w = sinApprox((w - m.SinOffset - m.SinBreath*b) * m.SinScale)
+			w = sinApprox((w - m.SinOffset) * m.SinScale)
 		}
 		r2 = x*x + y*y + z*z + w*w
 		if i < trapIters {
@@ -143,15 +126,6 @@ func (m *MixPinski) DE(p shad.Vec3, iters, level float64) (float64, shad.Vec4) {
 	return d, trap
 }
 
-// breath is how much of the breathing iteration i gets: 0 before from, 1
-// from BreathRamp iterations later.
-func (m *MixPinski) breath(i, from float64) float64 {
-	if m.Breath == (shad.Vec4{}) && m.SinBreath == 0 {
-		return 0
-	}
-	return shad.Smoothstep(from, from+m.BreathRamp, i)
-}
-
 func mixV4(a, b shad.Vec4, t float64) shad.Vec4 {
 	return shad.V4(a.X+(b.X-a.X)*t, a.Y+(b.Y-a.Y)*t, a.Z+(b.Z-a.Z)*t, a.W+(b.W-a.W)*t)
 }
@@ -170,7 +144,7 @@ func trapStep(t shad.Vec4, n int, x, y, z, r2 float64) shad.Vec4 {
 // coordinate pairs, a 4D rotation about RotOff, then a Sierpinski scale on x,
 // y, w and a Menger scale on z. The original swaps x and y on output, and so
 // does this.
-func (m *MixPinski) mixPinski(x, y, z, w float64, cs shad.Vec4) (float64, float64, float64, float64) {
+func (m *MixPinski) mixPinski(x, y, z, w float64) (float64, float64, float64, float64) {
 	if x+y < 0 {
 		x, y = -y, -x
 	}
@@ -195,11 +169,11 @@ func (m *MixPinski) mixPinski(x, y, z, w float64, cs shad.Vec4) (float64, float6
 	}
 
 	s := m.Scale
-	k := (s - 1) * cs.Z / s
-	ox := s*y - (s-1)*cs.X
-	oy := s*x - (s-1)*cs.Y
+	k := (s - 1) * m.CScale.Z / s
+	ox := s*y - (s-1)*m.CScale.X
+	oy := s*x - (s-1)*m.CScale.Y
 	oz := s * (k - math.Abs(z-k))
-	ow := s*w - (s-1)*cs.W
+	ow := s*w - (s-1)*m.CScale.W
 	return ox, oy, oz, ow
 }
 
