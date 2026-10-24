@@ -52,7 +52,7 @@ func (s *scene) reset() {
 	p := shad.DefaultPlayer()
 	p.Pos = shad.V3(-13, 3, 2.5)
 	p.Fwd = shad.V3(0, 0, 1)
-	p.Scale = 0.5
+	p.Scale = 0.2
 	p.FovY = 2 * math.Atan(1/1.2) // the original's focal length of 1.2
 	s.fly.Player = p
 }
