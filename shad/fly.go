@@ -1,6 +1,10 @@
 package shad
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"math"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
 
 // Flyer is a ready-made camera controller: a Player steered by keys and
 // mouse, colliding with the shader's Field if it has one. A shader calls its
@@ -92,4 +96,25 @@ func (fl *Flyer) Data(c *Context) string {
 		mode += ", no collisions"
 	}
 	return "Player\n  " + mode + "\n"
+}
+
+// ZoomBindings change the field of view while their keys are held: = (or
+// keypad +) narrows it and - (or keypad -) widens it, moving the focal
+// length (1 / tan(FovY/2)) by rate per second.
+func (fl *Flyer) ZoomBindings(rate float64) []Binding {
+	zoom := func(key Key, dir float64, help string) Binding {
+		return Binding{
+			Keys: []Key{key}, Hold: true, Help: help,
+			Action: func(c *Context) {
+				p := &fl.Player
+				focal := 1 / math.Tan(p.FovY/2)
+				focal = Clamp(focal+dir*rate*c.Input.DT, 0.2, 10)
+				p.FovY = 2 * math.Atan(1/focal)
+			},
+		}
+	}
+	return []Binding{
+		zoom(ebiten.KeyEqual, 1, "narrow the view"), zoom(ebiten.KeyNumpadAdd, 1, "narrow the view"),
+		zoom(ebiten.KeyMinus, -1, "widen the view"), zoom(ebiten.KeyNumpadSubtract, -1, "widen the view"),
+	}
 }

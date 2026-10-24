@@ -35,10 +35,10 @@ func New() shad.Def {
 		Field:   field{},
 		Update:  s.fly.Update,
 		Data:    s.fly.Data,
-		Bindings: append(shad.StandardBindings(), shad.Binding{
+		Bindings: append(append(shad.StandardBindings(), shad.Binding{
 			Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
 			Action: func(c *shad.Context) { s.reset() },
-		}),
+		}), s.fly.ZoomBindings(0.3)...),
 	}
 }
 

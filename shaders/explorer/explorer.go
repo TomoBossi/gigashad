@@ -41,14 +41,10 @@ func New() shad.Def {
 			s.fly.Update(c)
 		},
 		Data: s.fly.Data,
-		Bindings: append(shad.StandardBindings(),
-			shad.Binding{
-				Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
-				Action: func(c *shad.Context) { s.reset() },
-			},
-			s.zoom(ebiten.KeyEqual, 1, "narrow the view"), s.zoom(ebiten.KeyNumpadAdd, 1, "narrow the view"),
-			s.zoom(ebiten.KeyMinus, -1, "widen the view"), s.zoom(ebiten.KeyNumpadSubtract, -1, "widen the view"),
-		),
+		Bindings: append(append(shad.StandardBindings(), shad.Binding{
+			Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
+			Action: func(c *shad.Context) { s.reset() },
+		}), s.fly.ZoomBindings(0.3)...),
 	}
 }
 
@@ -59,20 +55,6 @@ func (s *scene) reset() {
 	p.Scale = 0.2
 	p.FovY = 2 * math.Atan(1/1.2) // the original's focal length of 1.2
 	s.fly.Player = p
-}
-
-// zoom changes the focal length while key is held, as the original's keypad
-// +/- did: about 0.3 per second.
-func (s *scene) zoom(key shad.Key, dir float64, help string) shad.Binding {
-	return shad.Binding{
-		Keys: []shad.Key{key}, Hold: true, Help: help,
-		Action: func(c *shad.Context) {
-			p := &s.fly.Player
-			focal := 1 / math.Tan(p.FovY/2)
-			focal = shad.Clamp(focal+dir*0.3*c.Input.DT, 0.2, 10)
-			p.FovY = 2 * math.Atan(1/focal)
-		},
-	}
 }
 
 // field is the fractal at the current time.
