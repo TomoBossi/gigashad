@@ -31,6 +31,7 @@ func main() {
 	fullscreen := flag.Bool("fullscreen", false, "start fullscreen")
 	shot := flag.String("shot", "", "render one frame to this PNG and exit (GPU shots briefly open a window)")
 	shotTime := flag.Float64("time", 0, "time in seconds for -shot")
+	shotDir := flag.String("shotdir", "shots", "directory where screenshots (P) and scene data (Tab) are saved, created if it doesn't exist; relative paths start at the current directory")
 	showFPS := flag.Bool("showfps", false, "show a frame rate counter in the bottom-right corner")
 	bench := flag.Int("bench", 0, "render this many frames from the spawn point as fast as possible, print the time per frame, and exit")
 	// Only the chosen shader's flags are declared, so -h lists them only
@@ -62,6 +63,10 @@ func main() {
 		if none {
 			fmt.Fprintf(out, "  (none)\n")
 		}
+		fmt.Fprintf(out, "\n%s controls:\n", chosen)
+		for _, line := range shad.ControlsHelp(new(mk())) {
+			fmt.Fprintf(out, "  - %s\n", line)
+		}
 	}
 	flag.Parse()
 
@@ -81,6 +86,12 @@ func main() {
 	}
 	if *width < 0 || *fps < 0 {
 		fail("-width and -fps must be 0 or positive")
+	}
+	if *shotDir == "" {
+		fail("-shotdir can't be empty")
+	}
+	if info, err := os.Stat(*shotDir); err == nil && !info.IsDir() {
+		fail("-shotdir %s is a file, not a directory", *shotDir)
 	}
 	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.OnCPU, "gpu": shad.OnGPU}[*backend]
 	if !ok {
@@ -113,7 +124,7 @@ func main() {
 	app, err := shad.NewApp(def, shad.Options{
 		Width: *width, Aspect: ratio, Backend: be,
 		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
-		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,
+		Title: "gigashad: " + *name, ShotDir: *shotDir, ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,
 		ShowFPS: *showFPS,
 	})
 	if err != nil {

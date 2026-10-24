@@ -47,6 +47,9 @@ type Def struct {
 	Update func(c *Context)
 	// Bindings map inputs to actions, checked every frame before Update.
 	Bindings []Binding
+	// Controls describes the controls Update reads itself, beyond Bindings,
+	// one "keys: what they do" line each, for -h (see FlyKeys.Help).
+	Controls []string
 	// Data adds shader-specific lines to SaveData's report.
 	Data func(c *Context) string
 }
