@@ -58,6 +58,7 @@ func New(opt Options) shad.Def {
 		sf.Gain *= opt.Glow
 		s.e.StepFog = &sf
 	}
+
 	s.f = s.e.F.(*MixPinski)
 	// Breathing: a smooth deformation of space at scales 8-128 observer sizes,
 	// which sways the fractal without changing its shape's topology.
@@ -68,6 +69,7 @@ func New(opt Options) shad.Def {
 	d.Update = s.update
 	d.Data = s.data
 	d.Static = func() bool { return s.opt.Breath == 0 }
+	d.Post = &post
 	s.e.GPUUniforms = s.uniforms
 	d.Bindings = append(shad.StandardBindings(), shad.Binding{
 		Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
@@ -157,7 +159,6 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 	tx := shad.Smoothstep(0, 0.4, h.Trap.X)
 	base := deep.Mix(teal, tz).Mix(moss, 0.5*(1-tx))
 
-
 	n := h.Normal
 	diff := math.Max(0, n.Dot(lightDir))
 	head := math.Max(0, -n.Dot(h.Dir))
@@ -175,13 +176,20 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 // and gain, and a depth term from the fog's Z offset, in observer sizes of
 // the scene's own 0.002. Our distance estimates and step counts don't match
 // Mandelbulb3D's exactly, so gain and threshold are calibrated against the
-// original render.
+// original render (with Reach, the count is far smaller than
+// Mandelbulb3D's, hence the much higher gain and lower threshold).
 var stepFog = fractal.StepFog{
 	Color:      shad.V3(23, 203, 255).Div(255),
 	Dense:      shad.V3(1, 1, 1),
-	Threshold:  1.2 * (137 - math.Sqrt(104)*11.313708) * (2.2 / 0.1) * 0.28,
+	Threshold:  0.2 * 1.2 * (137 - math.Sqrt(104)*11.313708) * (2.2 / 0.1) * 0.28,
 	DepthSlope: (2.2 / 0.1) * 0.7 / (181.788224833822 + 0.995421852006086) * (128 - 11.313708) * 0.002,
-	Gain:       0.35 * (85 - 53) * 0.1 * 0.00065,
+	Gain:       16 * 0.35 * (85 - 53) * 0.1 * 0.00065,
 	DenseRate:  0.1 * 0.015,
 	Floor:      shad.DetailPerScale,
+	// Only rays brushing a surface glow, not ones passing a phantom: some
+	// regions report a moderate distance with no surface anywhere near.
+	Reach: 0.5,
 }
+
+// post: more contrast than the raw render.
+var post = shad.Post{Contrast: 1.2}

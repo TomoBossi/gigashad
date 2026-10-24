@@ -101,9 +101,10 @@ var FogDepthSlope float
 var FogGain float
 var FogDenseRate float
 var FogFloor float
+var FogReach float
 
 // stepCount is StepFog's count over a step from distance d0 to d1.
-func stepCount(step, d0, d1 float) float {
+func stepCount(step, d0, d1, reach float) float {
 	d0 = max(d0, 1e-30)
 	d1 = max(d1, 1e-30)
 	dm := d0
@@ -111,7 +112,11 @@ func stepCount(step, d0, d1 float) float {
 	if abs(r-1) > 1e-4 {
 		dm = (d0 - d1) / log(r)
 	}
-	return 10 * step / dm
+	c := 10 * step / dm
+	if reach > 0 {
+		c *= exp(-dm / reach) // see StepFog.Reach
+	}
+	return c
 }
 
 func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
@@ -126,6 +131,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 	prevD := 0.0
 	prevStep := 0.0
 	fogFloor := FogFloor * CamScale // see StepFog.Floor
+	fogReach := FogReach * CamScale
 	hit := false
 	eps := minEps
 	d := 0.0
@@ -139,7 +145,7 @@ func Fragment(dstPos vec4, srcPos vec2, color vec4) vec4 {
 		eps = max(minEps, t*cone)
 		d, trap = deAt(rd*t, itersFor(eps), eps)
 		if steps > 1 {
-			count += stepCount(prevStep, max(prevD, fogFloor), max(d, fogFloor))
+			count += stepCount(prevStep, max(prevD, fogFloor), max(d, fogFloor), fogReach)
 		}
 		if d < eps {
 			hit = true

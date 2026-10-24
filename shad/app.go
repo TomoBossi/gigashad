@@ -52,6 +52,8 @@ type App struct {
 	cpuRes   *resController
 	gpuRes   *resController
 	onGPU    bool // the current frame came from the GPU
+	post     *postFX
+	final    *ebiten.Image // the frame on screen: the render, after Post
 
 	winW, winH int // window size in device-independent pixels, from Layout
 
@@ -93,6 +95,13 @@ func NewApp(def *Def, opt Options) (*App, error) {
 			return nil, err
 		}
 		a.gpu = g
+	}
+	if def.Post != nil {
+		fx, err := newPostFX(*def.Post)
+		if err != nil {
+			return nil, err
+		}
+		a.post = fx
 	}
 	budget := 0.85 / float64(opt.FPS)
 	a.cpuRes = newResController(DefaultCPUWidth, 96, 640, budget)
@@ -226,6 +235,10 @@ func (a *App) Update() error {
 		took = time.Since(t0)
 		a.img.WritePixels(a.renderer.RGBA)
 	}
+	a.final = a.current()
+	if a.post != nil {
+		a.final = a.post.apply(a.final)
+	}
 	// The first frame at a new size has nothing to reuse and isn't typical.
 	if !resized {
 		res.observe(took.Seconds())
@@ -328,7 +341,7 @@ func FirstFrame(def *Def, t float64) *Frame {
 }
 
 func (a *App) Draw(screen *ebiten.Image) {
-	img := a.current()
+	img := a.final
 	if img == nil {
 		return
 	}
@@ -354,13 +367,13 @@ func (a *App) Layout(w, h int) (int, int) {
 }
 
 func (a *App) save(path string) error {
-	if !a.onGPU {
-		if a.renderer == nil {
-			return fmt.Errorf("nothing rendered yet")
-		}
+	if a.final == nil {
+		return fmt.Errorf("nothing rendered yet")
+	}
+	if !a.onGPU && a.post == nil {
 		return SavePNG(path, a.renderer.RGBA, a.renderer.W, a.renderer.H)
 	}
-	img := a.gpu.img
+	img := a.final
 	w, h := img.Bounds().Dx(), img.Bounds().Dy()
 	pix := make([]byte, w*h*4)
 	img.ReadPixels(pix)

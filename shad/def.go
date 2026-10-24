@@ -23,6 +23,10 @@ type Def struct {
 	// nil means never.
 	Static func() bool
 
+	// Post is a finishing pass (bloom, grading) over every frame; nil for
+	// none.
+	Post *Post
+
 	// Field is the world as a distance field, if there is one: what collision
 	// and visibility queries use, on or off screen.
 	Field Field

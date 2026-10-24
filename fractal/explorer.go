@@ -202,16 +202,16 @@ func (e *Explorer) Fragment(frag shad.Vec2, f *shad.Frame, out *shad.Sample) {
 	var trap shad.Vec4
 	steps := 0
 	prevD, prevStep := 0.0, 0.0
-	fogFloor := 0.0
+	fogFloor, fogReach := 0.0, 0.0
 	if e.StepFog != nil {
-		fogFloor = e.StepFog.Floor * s
+		fogFloor, fogReach = e.StepFog.Floor*s, e.StepFog.Reach*s
 	}
 	for steps < e.Steps {
 		steps++
 		eps = math.Max(minEps, t*cone)
 		d, trap = sp.de(ro.Add(rd.Mul(t)), e.F.Iters(eps), level)
 		if steps > 1 {
-			count += stepCount(prevStep, math.Max(prevD, fogFloor), math.Max(d, fogFloor))
+			count += stepCount(prevStep, math.Max(prevD, fogFloor), math.Max(d, fogFloor), fogReach)
 		}
 		if d < eps {
 			hit = true

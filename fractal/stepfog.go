@@ -27,6 +27,12 @@ type StepFog struct {
 	// flash whenever it changes). Closer distances count as Floor, and on a
 	// hit the rest of the approach down to Floor is added as if marched.
 	Floor float64
+	// Reach, in observer sizes, if set, fades out the count from distances
+	// well beyond it: rays brushing a surface glow, rays that only pass
+	// within a moderate distance of something for a long stretch don't.
+	// Some distance estimates sit at a moderate value over regions with no
+	// surface (phantoms), which would otherwise glow like glass.
+	Reach float64
 }
 
 type Vec3 = shad.Vec3
@@ -35,13 +41,17 @@ type Vec3 = shad.Vec3
 // distance d0 to d1 from the surface. It integrates 10/DE assuming DE
 // changes linearly over the step (its log-mean), so it doesn't depend on how
 // coarsely the ray marches.
-func stepCount(step, d0, d1 float64) float64 {
+func stepCount(step, d0, d1, reach float64) float64 {
 	d0, d1 = math.Max(d0, 1e-300), math.Max(d1, 1e-300)
 	dm := d0
 	if r := d0 / d1; math.Abs(r-1) > 1e-6 {
 		dm = (d0 - d1) / math.Log(r)
 	}
-	return 10 * step / dm
+	c := 10 * step / dm
+	if reach > 0 {
+		c *= math.Exp(-dm / reach)
+	}
+	return c
 }
 
 // approach is the count a ray at distance d from the surface would add
@@ -72,4 +82,5 @@ func (sf *StepFog) uniforms(u map[string]any) {
 	u["FogThreshold"], u["FogDepthSlope"] = float32(s.Threshold), float32(s.DepthSlope)
 	u["FogGain"], u["FogDenseRate"] = float32(s.Gain), float32(s.DenseRate)
 	u["FogFloor"] = float32(s.Floor)
+	u["FogReach"] = float32(s.Reach)
 }
