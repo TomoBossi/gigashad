@@ -149,9 +149,9 @@ func startPlayer() shad.Player {
 
 var (
 	lightDir = shad.V3(0.3, 0.8, 0.5).Norm()
-	teal     = shad.V3(0.04, 0.30, 0.32)
+	teal     = shad.V3(0.045, 0.33, 0.40)
 	deep     = shad.V3(0.02, 0.06, 0.16)
-	moss     = shad.V3(0.05, 0.26, 0.24)
+	moss     = shad.V3(0.06, 0.30, 0.28)
 	cyan     = shad.V3(0.2, 0.9, 1.0)
 )
 
@@ -160,14 +160,15 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 	// pick out the panel-and-circuit look.
 	tz := shad.Smoothstep(0, 0.15, h.Trap.Z)
 	tx := shad.Smoothstep(0, 0.4, h.Trap.X)
-	base := deep.Mix(teal, tz).Mix(moss, 0.5*(1-tx))
+	base := deep.Mix(teal, tz).Mix(moss, 0.6*(1-tx))
 
 	n := h.Normal
 	diff := math.Max(0, n.Dot(lightDir))
 	head := math.Max(0, -n.Dot(h.Dir))
 	spec := math.Pow(math.Max(0, h.Dir.Sub(n.Mul(2*n.Dot(h.Dir))).Dot(lightDir)), 16)
 
-	col := base.Mul(0.25 + 0.6*diff + 0.4*head).Mul(h.AO)
+	// A generous ambient term keeps surfaces colored between the glows.
+	col := base.Mul(0.33 + 0.6*diff + 0.4*head).Mul(0.2 + 0.8*h.AO)
 	col = col.Add(shad.S3(0.3 * spec * h.AO))
 	col = col.Add(cyan.Mul(0.15 * h.Glow))
 	return col

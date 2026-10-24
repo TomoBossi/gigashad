@@ -266,20 +266,20 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 
 func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 {
 	lightDir := normalize(vec3(0.3, 0.8, 0.5))
-	teal := vec3(0.04, 0.30, 0.32)
+	teal := vec3(0.045, 0.33, 0.40)
 	deep := vec3(0.02, 0.06, 0.16)
-	moss := vec3(0.05, 0.26, 0.24)
+	moss := vec3(0.06, 0.30, 0.28)
 	cyan := vec3(0.2, 0.9, 1.0)
 
 	tz := smoothstep(0, 0.15, trap.z)
 	tx := smoothstep(0, 0.4, trap.x)
-	base := mix(mix(deep, teal, tz), moss, 0.5*(1-tx))
+	base := mix(mix(deep, teal, tz), moss, 0.6*(1-tx))
 
 	diff := max(0, dot(n, lightDir))
 	head := max(0, -dot(n, dir))
 	spec := pow(max(0, dot(dir-n*(2*dot(n, dir)), lightDir)), 16)
 
-	col := base * (0.25 + 0.6*diff + 0.4*head) * ao
+	col := base * (0.33 + 0.6*diff + 0.4*head) * (0.2 + 0.8*ao) // see material in scene.go
 	col += vec3(0.3 * spec * ao)
 	col += cyan * (0.15 * glow)
 	return col
