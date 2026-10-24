@@ -167,7 +167,7 @@ func (a *App) Update() error {
 	}
 
 	a.readInput(dt)
-	c := &Context{Frame: f, Input: &a.input, app: a}
+	c := &Context{Frame: f, Input: &a.input, def: a.def, app: a}
 	if a.opt.ShotPath != "" || a.opt.Bench > 0 {
 		c.Input = &Input{} // shots and benchmarks see no input
 	}
@@ -341,7 +341,7 @@ func FirstFrame(def *Def, t float64) *Frame {
 	p := DefaultPlayer()
 	f := &Frame{Time: t, Cam: p.Camera()}
 	if def.Update != nil {
-		def.Update(&Context{Frame: f, Input: &Input{}})
+		def.Update(&Context{Frame: f, Input: &Input{}, def: def})
 	}
 	return f
 }

@@ -100,10 +100,10 @@ func (c *Context) Last() *GBuffer {
 
 // Field returns the shader's distance field, or nil.
 func (c *Context) Field() Field {
-	if c.app == nil {
+	if c.def == nil {
 		return nil
 	}
-	return c.app.def.Field
+	return c.def.Field
 }
 
 // Report describes the scene as text: what SaveData writes.
@@ -120,8 +120,8 @@ func (c *Context) Report() string {
 		fmt.Fprintf(&b, "Render\n  %s %dx%d, %.1f ms\n", backend, a.lastW, a.lastH, a.took.Seconds()*1e3)
 	}
 	b.WriteString(c.crosshair())
-	if c.app != nil && c.app.def.Data != nil {
-		b.WriteString(c.app.def.Data(c))
+	if c.def != nil && c.def.Data != nil {
+		b.WriteString(c.def.Data(c))
 	}
 	return b.String()
 }

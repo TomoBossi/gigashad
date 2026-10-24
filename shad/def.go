@@ -103,14 +103,15 @@ type Binding struct {
 type Context struct {
 	Frame *Frame
 	Input *Input
-	app   *App // nil for -shot frames, where app services do nothing
+	def   *Def
+	app   *App // nil outside the app, where app services do nothing
 }
 
 // RunFrame runs one frame of def's logic outside the app, as the app would:
 // bindings, then Update. For tests and scripted runs; app services (Field,
 // Screenshot, ...) do nothing.
 func RunFrame(def *Def, f *Frame, in *Input) {
-	c := &Context{Frame: f, Input: in}
+	c := &Context{Frame: f, Input: in, def: def}
 	for i := range def.Bindings {
 		if b := &def.Bindings[i]; b.fired(in) {
 			b.Action(c)
