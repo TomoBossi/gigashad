@@ -153,6 +153,13 @@ func (a *App) aspect() float64 {
 func (a *App) Update() error {
 	now := time.Now()
 	dt := min(now.Sub(a.last).Seconds(), 0.1)
+
+	// macOS releases the captured pointer when the window loses focus or
+	// changes to or from fullscreen; take it back whenever we have focus.
+	if ebiten.IsFocused() && ebiten.CursorMode() != ebiten.CursorModeCaptured {
+		ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+		a.mouseOK = false // don't turn the camera by the jump back
+	}
 	a.last = now
 
 	f := &a.frame
