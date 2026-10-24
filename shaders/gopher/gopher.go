@@ -32,6 +32,7 @@ func New() shad.Def {
 		CPU:     shader{},
 		GPU:     &shad.GPU{Variants: []shad.Kage{{Source: kage}}},
 		Backend: func(*shad.Frame) shad.Backend { return shad.OnGPU },
+		FPS:     60, // cheap enough to run at the screen's rate, as the original did
 		Field:   field{},
 		Update:  s.fly.Update,
 		Data:    s.fly.Data,
@@ -47,6 +48,7 @@ func (s *scene) reset() {
 	p.Pos = shad.V3(0, 0, -3)
 	p.Fwd = shad.V3(0, 0, 1)
 	p.Scale = 0.25
+	p.Speed = 6                 // about 4.5 units a second, the original's pace
 	p.FovY = 2 * math.Atan(0.5) // the original's focal length of 1
 	s.fly.Player = p
 }

@@ -29,7 +29,7 @@ func main() {
 	backend := flag.String("backend", "auto", "where to render: auto (the shader decides), cpu or gpu")
 	width := flag.Int("width", 0, "fixed render width in pixels; 0 adjusts it every frame to hold -fps")
 	ar := flag.String("ar", "auto", "aspect ratio as w:h, or auto to follow the window (and the monitor when fullscreen)")
-	fps := flag.Int("fps", 30, "target and cap frame rate")
+	fps := flag.Int("fps", 0, "target and cap frame rate; 0 uses the shader's own, or 30")
 	threads := flag.Int("threads", 3, "CPU cores to render with; 0 uses all of them")
 	reuse := flag.Int("reuse", 4, "on scenes that don't change over time, shade only 1 pixel in this many per frame (1, 2 or 4) and reuse the previous frame for the rest")
 	fullscreen := flag.Bool("fullscreen", false, "start fullscreen")
@@ -54,8 +54,8 @@ func main() {
 		}
 		ratio = r
 	}
-	if *width < 0 || *fps <= 0 {
-		fail("-width must be 0 or positive, -fps positive")
+	if *width < 0 || *fps < 0 {
+		fail("-width and -fps must be 0 or positive")
 	}
 	be, ok := map[string]shad.Backend{"auto": shad.Auto, "cpu": shad.OnCPU, "gpu": shad.OnGPU}[*backend]
 	if !ok {
@@ -78,7 +78,14 @@ func main() {
 		return
 	}
 
-	app, err := shad.NewApp(new(mk()), shad.Options{
+	def := new(mk())
+	if *fps == 0 {
+		*fps = def.FPS
+	}
+	if *fps == 0 {
+		*fps = 30
+	}
+	app, err := shad.NewApp(def, shad.Options{
 		Width: *width, Aspect: ratio, Backend: be,
 		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
 		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,

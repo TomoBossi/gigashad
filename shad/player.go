@@ -13,6 +13,9 @@ type Player struct {
 	Scale   float64
 	FovY    float64
 	Fisheye float64 // see Camera.Fisheye
+	// Speed multiplies how fast the player moves, independently of its size
+	// (and so of its collision sphere); 0 means 1.
+	Speed float64
 
 	Vel      Vec3
 	Walk     bool // gravity on; otherwise free flight
@@ -93,6 +96,9 @@ func (p *Player) Step(in Intent, field Field, dt float64) {
 		p.grow(in.Grow*dt, field)
 	}
 	speed := walkSpeed * p.Scale
+	if p.Speed > 0 {
+		speed *= p.Speed
+	}
 	if in.Fast {
 		speed *= 4
 	}

@@ -27,6 +27,10 @@ type Def struct {
 	// none.
 	Post *Post
 
+	// FPS is the frame rate the shader is meant to run at, when the user
+	// doesn't choose one; 0 means the app's default.
+	FPS int
+
 	// Field is the world as a distance field, if there is one: what collision
 	// and visibility queries use, on or off screen.
 	Field Field
