@@ -141,6 +141,9 @@ func startPlayer() shad.Player {
 	p.Pos, p.Fwd, p.Up = startPos, startFwd, startUp
 	p.Scale = 0.002
 	p.FovY = 60 * math.Pi / 180
+	// Mandelbulb3D turns each ray by an angle proportional to the pixel's
+	// distance from the image center: an equidistant camera.
+	p.Fisheye = 1
 	return p
 }
 
@@ -192,4 +195,4 @@ var stepFog = fractal.StepFog{
 }
 
 // post: more contrast than the raw render.
-var post = shad.Post{Contrast: 1.2}
+var post = shad.Post{Contrast: 1.1}

@@ -23,6 +23,7 @@ var CamRight vec3
 var CamUp vec3
 var CamFwd vec3
 var CamFovY float
+var CamFisheye float
 var CamScale float
 
 // fragCoord converts dstPos to the CPU's convention: pixel centers, origin at
@@ -45,7 +46,15 @@ func lodPixelAngle() float {
 
 // camRay is Camera.Ray.
 func camRay(frag vec2) vec3 {
-	uv := (frag - Resolution/2) * pixelAngle()
+	k := pixelAngle()
+	uv := (frag - Resolution/2) * k
+	if CamFisheye != 0 {
+		r := length(uv)
+		if r > 0 {
+			theta := mix(atan(r), r/k*CamFovY/Resolution.y, CamFisheye)
+			uv *= tan(min(theta, 1.55)) / r
+		}
+	}
 	return normalize(CamFwd + CamRight*uv.x + CamUp*uv.y)
 }
 
@@ -194,6 +203,7 @@ func (g *gpuRenderer) render(f *Frame) {
 	u["CamUp"] = Vec3f(c.Up)
 	u["CamFwd"] = Vec3f(c.Fwd)
 	u["CamFovY"] = float32(c.FovY)
+	u["CamFisheye"] = float32(c.Fisheye)
 	u["CamScale"] = float32(c.Scale)
 	if g.def.Uniforms != nil {
 		g.def.Uniforms(f, u)

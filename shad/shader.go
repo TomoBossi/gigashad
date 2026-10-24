@@ -62,6 +62,11 @@ type Camera struct {
 	Right, Up, Fwd Vec3
 	FovY           float64 // vertical field of view, radians
 	Scale          float64
+	// Fisheye blends from a rectilinear projection (0: straight lines stay
+	// straight) to an equidistant one (1: the angle from the view axis grows
+	// in proportion to the distance from the image center, as in
+	// Mandelbulb3D).
+	Fisheye float64
 }
 
 // Ray returns the unit direction through pixel frag.
@@ -69,7 +74,43 @@ func (c *Camera) Ray(frag, res Vec2) Vec3 {
 	k := math.Tan(c.FovY/2) * 2 / res.Y
 	u := (frag.X - res.X/2) * k
 	v := (frag.Y - res.Y/2) * k
+	if c.Fisheye != 0 {
+		if r := math.Hypot(u, v); r > 0 {
+			theta := Mix(math.Atan(r), r/k*c.FovY/res.Y, c.Fisheye)
+			s := math.Tan(math.Min(theta, 1.55)) / r
+			u, v = u*s, v*s
+		}
+	}
 	return c.Fwd.Add(c.Right.Mul(u)).Add(c.Up.Mul(v)).Norm()
+}
+
+// Project is the inverse of Ray: the pixel position (CPU convention) that
+// direction v, relative to the camera, shows up at, or ok=false if it is
+// behind the camera.
+func (c *Camera) Project(v Vec3, res Vec2) (frag Vec2, ok bool) {
+	z := v.Dot(c.Fwd)
+	if z <= 0 {
+		return Vec2{}, false
+	}
+	k := math.Tan(c.FovY/2) * 2 / res.Y
+	u, w := v.Dot(c.Right)/z, v.Dot(c.Up)/z // rectilinear image-plane coordinates
+	if c.Fisheye != 0 {
+		// Ray maps image-plane radius r to the angle
+		// theta(r) = mix(atan(r), r/k·FovY/H, Fisheye); find the r giving
+		// this direction's angle (theta is increasing, Newton converges fast).
+		if t := math.Hypot(u, w); t > 0 {
+			theta := math.Atan(t)
+			a := c.FovY / (res.Y * k)
+			r := theta / Mix(1, a, c.Fisheye)
+			for range 6 {
+				f := Mix(math.Atan(r), a*r, c.Fisheye) - theta
+				df := Mix(1/(1+r*r), a, c.Fisheye)
+				r -= f / df
+			}
+			u, w = u*r/t, w*r/t
+		}
+	}
+	return Vec2{u/k + res.X/2, w/k + res.Y/2}, true
 }
 
 // PixelAngle is the angular size of one pixel, handy for cone-based level of

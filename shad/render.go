@@ -84,7 +84,6 @@ func (r *Renderer) reproject(c *Camera) {
 		r.srcDist[i] = math.Inf(1)
 	}
 	res := Vec2{float64(r.W), float64(r.H)}
-	k := 1 / c.PixelAngle(res)
 	for i := range r.prev.Samples {
 		s := &r.prev.Samples[i]
 		// Surfaces reproject by position; misses (sky, fog) by direction, as
@@ -97,12 +96,11 @@ func (r *Renderer) reproject(c *Camera) {
 		} else {
 			v = r.prevCam.Ray(Vec2{float64(i%r.W) + 0.5, float64(i/r.W) + 0.5}, res)
 		}
-		z := v.Dot(c.Fwd)
-		if z <= 0 {
+		frag, ok := c.Project(v, res)
+		if !ok {
 			continue
 		}
-		x := int(v.Dot(c.Right)/z*k + float64(r.W)/2)
-		y := int(v.Dot(c.Up)/z*k + float64(r.H)/2)
+		x, y := int(frag.X), int(frag.Y)
 		if x < 0 || y < 0 || x >= r.W || y >= r.H {
 			continue
 		}

@@ -7,11 +7,12 @@ import "math"
 // so shrinking the player slows it down in absolute terms while it feels the
 // same to the person playing.
 type Player struct {
-	Pos   Vec3
-	Fwd   Vec3 // look direction, unit
-	Up    Vec3 // world up, unit; gravity pulls along -Up
-	Scale float64
-	FovY  float64
+	Pos     Vec3
+	Fwd     Vec3 // look direction, unit
+	Up      Vec3 // world up, unit; gravity pulls along -Up
+	Scale   float64
+	FovY    float64
+	Fisheye float64 // see Camera.Fisheye
 
 	Vel      Vec3
 	Walk     bool // gravity on; otherwise free flight
@@ -57,7 +58,7 @@ func (p *Player) Right() Vec3 { return p.Fwd.Cross(p.Up).Norm() }
 
 func (p *Player) Camera() Camera {
 	r := p.Right()
-	return Camera{Pos: p.Pos, Fwd: p.Fwd, Right: r, Up: r.Cross(p.Fwd), FovY: p.FovY, Scale: p.Scale}
+	return Camera{Pos: p.Pos, Fwd: p.Fwd, Right: r, Up: r.Cross(p.Fwd), FovY: p.FovY, Scale: p.Scale, Fisheye: p.Fisheye}
 }
 
 // Look turns the view. Walking, Up is gravity's and stays put, and pitch
