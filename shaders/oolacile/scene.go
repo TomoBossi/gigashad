@@ -70,6 +70,7 @@ func New(opt Options) shad.Def {
 	d.Data = s.data
 	d.Static = func() bool { return s.opt.Breath == 0 }
 	d.Post = &post
+	d.CaptureMouse = true // the mouse looks around
 	s.e.GPUUniforms = s.uniforms
 	d.Bindings = append(shad.StandardBindings(), shad.Binding{
 		Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",

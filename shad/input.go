@@ -10,6 +10,7 @@ type Input struct {
 	DT     float64 // seconds since the previous frame
 	MouseX float64 // cursor movement since the previous frame, in pixels
 	MouseY float64
+	Wheel  float64      // scroll since the previous frame, positive up
 	live   bool         // read the keyboard; otherwise only scripted keys are down
 	keys   map[Key]bool // scripted keys, see ScriptedInput
 }

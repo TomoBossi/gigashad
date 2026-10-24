@@ -35,6 +35,12 @@ type Def struct {
 	// and visibility queries use, on or off screen.
 	Field Field
 
+	// CaptureMouse hides the pointer and keeps it in the window while it has
+	// focus, so the mouse turns the view (Input.MouseX/MouseY) without ever
+	// leaving it. Shaders that don't steer with the mouse leave the pointer
+	// free.
+	CaptureMouse bool
+
 	// Update runs once per frame before rendering, on one goroutine: read
 	// input, move the camera (set c.Frame.Cam), advance any state. It also
 	// runs, with no input, before -shot and -bench frames.

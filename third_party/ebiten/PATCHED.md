@@ -9,7 +9,8 @@ double-float emulation into zeros; it is also about a third faster, so every
 other shader keeps it. The
 packages gigashad doesn't use (`examples`, `text`, `audio`, `vector`,
 `exp`, `misc`, `mobile`, `cmd`), ebiten's tests and its CI config are left
-out.
+out. So is `ebitenutil/shapes.go`, whose deprecated drawing helpers need
+`vector`.
 
 To update: copy the new ebiten release here, reapply the change, and update
 the version in this file and in gigashad's go.mod.

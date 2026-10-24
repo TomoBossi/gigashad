@@ -13,11 +13,12 @@ type plasma struct{}
 // Register: plasma has no flags of its own.
 func Register(shad.Flags) func() shad.Def { return New }
 
-// New: CPU and GPU versions; the CPU runs unless -backend gpu is given.
+// New: CPU and GPU versions; the GPU runs unless -backend cpu is given.
 func New() shad.Def {
 	return shad.Def{
 		CPU:      plasma{},
 		GPU:      &shad.GPU{Variants: []shad.Kage{{Source: kage}}},
+		Backend:  func(*shad.Frame) shad.Backend { return shad.OnGPU },
 		Bindings: shad.StandardBindings(),
 	}
 }

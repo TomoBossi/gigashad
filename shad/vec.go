@@ -1,6 +1,9 @@
 package shad
 
-import "math"
+import (
+	"fmt"
+	"math"
+)
 
 // Vec2 is a 2D vector, the CPU stand-in for GLSL's vec2.
 type Vec2 struct{ X, Y float64 }
@@ -86,3 +89,5 @@ func Smoothstep(e0, e1, x float64) float64 {
 	t := Clamp((x-e0)/(e1-e0), 0, 1)
 	return t * t * (3 - 2*t)
 }
+
+func (a Vec3) String() string { return fmt.Sprintf("(%.6g, %.6g, %.6g)", a.X, a.Y, a.Z) }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
 // Default render widths, used to start the resolution controller and for
@@ -38,6 +39,7 @@ type Options struct {
 	ShotPath   string  // if set, save the first frame here and quit
 	ShotTime   float64 // Frame.Time of that frame
 	Bench      int     // if set, time this many frames, print, and quit
+	ShowFPS    bool    // draw a frame rate counter in the bottom-right corner
 }
 
 // App owns the window and the per-frame loop: input, bindings, the shader's
@@ -104,8 +106,13 @@ func NewApp(def *Def, opt Options) (*App, error) {
 		a.post = fx
 	}
 	// Leave a quarter of each frame for everything else (input, Update,
-	// collisions, presenting).
-	budget := 0.75 / float64(opt.FPS)
+	// collisions, presenting), and more at high frame rates, where frames
+	// are short and that work is a larger share of them.
+	share := 0.75
+	if opt.FPS >= 60 {
+		share = 0.65
+	}
+	budget := share / float64(opt.FPS)
 	a.cpuRes = newResController(DefaultCPUWidth, 96, 640, budget)
 	a.gpuRes = newResController(DefaultGPUWidth, 160, 3840, budget)
 	if opt.Width > 0 {
@@ -128,7 +135,9 @@ func (a *App) Run() error {
 	ebiten.SetWindowSize(ww, int(float64(ww)/aspect))
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 	ebiten.SetFullscreen(a.opt.Fullscreen)
-	ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+	if a.def.CaptureMouse {
+		ebiten.SetCursorMode(ebiten.CursorModeCaptured)
+	}
 	ebiten.SetTPS(a.opt.FPS)
 	ebiten.SetVsyncEnabled(true)
 	err := ebiten.RunGame(a)
@@ -156,7 +165,7 @@ func (a *App) Update() error {
 
 	// macOS releases the captured pointer when the window loses focus or
 	// changes to or from fullscreen; take it back whenever we have focus.
-	if ebiten.IsFocused() && ebiten.CursorMode() != ebiten.CursorModeCaptured {
+	if a.def.CaptureMouse && ebiten.IsFocused() && ebiten.CursorMode() != ebiten.CursorModeCaptured {
 		ebiten.SetCursorMode(ebiten.CursorModeCaptured)
 		a.mouseOK = false // don't turn the camera by the jump back
 	}
@@ -207,7 +216,9 @@ func (a *App) Update() error {
 			res.setMax(int(hi))
 		}
 	}
-	moving := f.Index == 0 || f.Cam != a.lastCam
+	// Without Update there's no camera to move, but an animated image
+	// changes everywhere every frame, which hides resizes just as well.
+	moving := f.Index == 0 || f.Cam != a.lastCam || (a.def.Update == nil && !a.static())
 	w := res.width(moving)
 	h := max(1, int(math.Round(float64(w)/a.aspect())))
 	// Level of detail follows the render width, but slowly (see Frame.LOD):
@@ -272,7 +283,8 @@ func (a *App) static() bool { return a.def.Static != nil && a.def.Static() }
 
 func (a *App) readInput(dt float64) {
 	mx, my := ebiten.CursorPosition()
-	a.input = Input{DT: dt, live: true}
+	_, wheel := ebiten.Wheel()
+	a.input = Input{DT: dt, Wheel: wheel, live: true}
 	if a.mouseOK {
 		a.input.MouseX = float64(mx - a.mouseX)
 		a.input.MouseY = float64(my - a.mouseY)
@@ -365,6 +377,43 @@ func (a *App) Draw(screen *ebiten.Image) {
 	op.GeoM.Scale(scale, scale)
 	op.GeoM.Translate((sw-scale*w)/2, (sh-scale*h)/2)
 	screen.DrawImage(img, op)
+	if a.opt.ShowFPS {
+		drawFPS(screen)
+	}
+}
+
+// fpsText holds the counter's text, drawn once and stamped several times.
+var fpsText *ebiten.Image
+
+// drawFPS draws the frame rate in the bottom-right corner, white with a black
+// outline so it reads over any image. It goes on the screen only, never into
+// screenshots.
+func drawFPS(screen *ebiten.Image) {
+	// ebitenutil's debug font: 6 pixels per character, 16 per line.
+	const charW, lineH, pad = 6, 16, 3
+	s := fmt.Sprintf("%.0f fps", ebiten.ActualFPS())
+	w := len(s)*charW + 2
+	if fpsText == nil || fpsText.Bounds().Dx() < w {
+		fpsText = ebiten.NewImage(w+4*charW, lineH)
+	}
+	fpsText.Clear()
+	ebitenutil.DebugPrintAt(fpsText, s, 0, 0)
+	b := screen.Bounds()
+	x, y := float64(b.Max.X-w-pad), float64(b.Max.Y-lineH-pad)
+	for dy := -1.0; dy <= 1; dy++ {
+		for dx := -1.0; dx <= 1; dx++ {
+			if dx == 0 && dy == 0 {
+				continue
+			}
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Translate(x+dx, y+dy)
+			op.ColorScale.Scale(0, 0, 0, 1)
+			screen.DrawImage(fpsText, op)
+		}
+	}
+	op := &ebiten.DrawImageOptions{}
+	op.GeoM.Translate(x, y)
+	screen.DrawImage(fpsText, op)
 }
 
 func (a *App) current() *ebiten.Image {

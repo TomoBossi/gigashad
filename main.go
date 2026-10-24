@@ -9,8 +9,6 @@ import (
 	"strings"
 
 	"gigashad/shad"
-	"gigashad/shaders/explorer"
-	"gigashad/shaders/gopher"
 	"gigashad/shaders/oolacile"
 	"gigashad/shaders/plasma"
 )
@@ -18,8 +16,6 @@ import (
 // shaders maps names to registration functions, which declare the shader's
 // own flags (namespaced by its name) and return its constructor.
 var shaders = map[string]func(shad.Flags) func() shad.Def{
-	"explorer": explorer.Register,
-	"gopher":   gopher.Register,
 	"oolacile": oolacile.Register,
 	"plasma":   plasma.Register,
 }
@@ -35,6 +31,7 @@ func main() {
 	fullscreen := flag.Bool("fullscreen", false, "start fullscreen")
 	shot := flag.String("shot", "", "render one frame to this PNG and exit (GPU shots briefly open a window)")
 	shotTime := flag.Float64("time", 0, "time in seconds for -shot")
+	showFPS := flag.Bool("showfps", false, "show a frame rate counter in the bottom-right corner")
 	bench := flag.Int("bench", 0, "render this many frames from the spawn point as fast as possible, print the time per frame, and exit")
 	constructors := map[string]func() shad.Def{}
 	for n, register := range shaders {
@@ -92,6 +89,7 @@ func main() {
 		Width: *width, Aspect: ratio, Backend: be,
 		FPS: *fps, Threads: *threads, Reuse: *reuse, Fullscreen: *fullscreen,
 		Title: "gigashad: " + *name, ShotDir: "shots", ShotPath: *shot, ShotTime: *shotTime, Bench: *bench,
+		ShowFPS: *showFPS,
 	})
 	if err != nil {
 		fail("%v", err)
