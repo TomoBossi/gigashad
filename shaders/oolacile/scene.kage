@@ -266,10 +266,10 @@ func de(ph vec3, pl vec3, iters float, level float, eps float) (float, vec4) {
 
 func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 {
 	lightDir := normalize(vec3(0.3, 0.8, 0.5))
-	teal := vec3(0.055, 0.27, 0.37)
-	deep := vec3(0.03, 0.075, 0.165)
-	moss := vec3(0.11, 0.20, 0.26)
-	cyan := vec3(0.27, 0.8, 1.0)
+	teal := vec3(0.04, 0.30, 0.32)
+	deep := vec3(0.02, 0.06, 0.16)
+	moss := vec3(0.05, 0.26, 0.24)
+	cyan := vec3(0.2, 0.9, 1.0)
 
 	tz := smoothstep(0, 0.15, trap.z)
 	tx := smoothstep(0, 0.4, trap.x)
@@ -286,5 +286,5 @@ func material(pos vec3, n vec3, dir vec3, trap vec4, ao float, glow float) vec3 
 }
 
 func background(dir vec3, glow float) vec3 {
-	return Fog + vec3(0.15, 0.5, 0.75)*(glow*glow*0.6)
+	return Fog + vec3(0.1, 0.5, 0.8)*(glow*glow*0.6)
 }
