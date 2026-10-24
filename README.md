@@ -15,6 +15,12 @@ On the CPU everything a shader computes stays readable: the previous frame's G-b
 
 Package `fractal` explores distance-estimated fractals at any scale for the same cost: shrink to see more detail, at the price of view distance and speed. On the GPU it switches to double-float arithmetic (pairs of 32-bit floats) as you shrink, and reaches about as deep as the CPU's 64-bit floats. That needs Metal's fast math off, which stock ebiten can't do, hence the patched copy in `third_party/ebiten` (see its `PATCHED.md`).
 
+## Shaders
+- `oolacile`: Neo Oolacile, a Mandelbulb3D scene (MixPinski4ex and a sine on w) decoded from its parameter file, explorable at any scale.
+- `explorer`: an animated kleinian fractal with layered, translucent near misses, adapted from "Fractal Explorer" by David Hoskins.
+- `gopher`: an endless field of nodding Go gophers, adapted from "Gopher Golang" by cepalle.
+- `plasma`: a minimal 2D example.
+
 ## Run
 ```
 go run . -shader oolacile -fps 30 -threads 3 -reuse 4

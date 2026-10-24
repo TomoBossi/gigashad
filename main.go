@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gigashad/shad"
+	"gigashad/shaders/explorer"
 	"gigashad/shaders/gopher"
 	"gigashad/shaders/oolacile"
 	"gigashad/shaders/plasma"
@@ -17,6 +18,7 @@ import (
 // shaders maps names to registration functions, which declare the shader's
 // own flags (namespaced by its name) and return its constructor.
 var shaders = map[string]func(shad.Flags) func() shad.Def{
+	"explorer": explorer.Register,
 	"gopher":   gopher.Register,
 	"oolacile": oolacile.Register,
 	"plasma":   plasma.Register,
