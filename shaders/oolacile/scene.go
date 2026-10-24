@@ -74,7 +74,8 @@ func New(opt Options) shad.Def {
 	d.Controls = s.fly.Keys.Help()
 	s.e.GPUUniforms = s.uniforms
 	d.Bindings = append(shad.StandardBindings(), shad.Binding{
-		Keys: []shad.Key{ebiten.KeyR}, Help: "reset to the startup state",
+		Keys: []shad.Key{ebiten.KeyR}, Buttons: []shad.Button{ebiten.StandardGamepadButtonCenterLeft},
+		Help:   "reset to the startup state",
 		Action: func(c *shad.Context) { s.reset(c.Frame.Time) },
 	})
 	return d

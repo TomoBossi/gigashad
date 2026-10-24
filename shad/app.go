@@ -294,6 +294,7 @@ func (a *App) readInput(dt float64) {
 	mx, my := ebiten.CursorPosition()
 	_, wheel := ebiten.Wheel()
 	a.input = Input{DT: dt, Wheel: wheel, live: true}
+	a.input.readPads()
 	if a.mouseOK {
 		a.input.MouseX = float64(mx - a.mouseX)
 		a.input.MouseY = float64(my - a.mouseY)

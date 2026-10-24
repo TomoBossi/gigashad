@@ -103,6 +103,8 @@ type Key = ebiten.Key
 type Binding struct {
 	// Keys must all be held, and the last one triggers the action.
 	Keys []Key
+	// Buttons trigger the action too, any one of them on its own.
+	Buttons []Button
 	// Hold fires the action every frame the keys are held, instead of once
 	// per press.
 	Hold bool

@@ -43,11 +43,11 @@ func SaveData(c *Context) {
 }
 
 // StandardBindings are Esc to quit, F for fullscreen, P for a screenshot and
-// Tab to save scene data.
+// Tab to save scene data; on a gamepad, Start and Y.
 func StandardBindings() []Binding {
 	return []Binding{
-		{Keys: []Key{ebiten.KeyEscape}, Help: "quit", Action: Quit},
-		{Keys: []Key{ebiten.KeyF}, Help: "fullscreen", Action: ToggleFullscreen},
+		{Keys: []Key{ebiten.KeyEscape}, Buttons: []Button{ebiten.StandardGamepadButtonCenterRight}, Help: "quit", Action: Quit},
+		{Keys: []Key{ebiten.KeyF}, Buttons: []Button{ebiten.StandardGamepadButtonRightTop}, Help: "fullscreen", Action: ToggleFullscreen},
 		{Keys: []Key{ebiten.KeyP}, Help: "screenshot", Action: Screenshot},
 		{Keys: []Key{ebiten.KeyTab}, Help: "save scene data", Action: SaveData},
 	}

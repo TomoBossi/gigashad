@@ -89,6 +89,51 @@ func TestEveryControlKeyWorks(t *testing.T) {
 	}
 }
 
+// Every gamepad control does something on its own, and a resting stick
+// does nothing.
+func TestEveryPadControlWorks(t *testing.T) {
+	k := keys()
+	type pad struct {
+		button shad.Button
+		stick  shad.Stick
+		v      float64
+	}
+	var controls = map[string]pad{
+		"move forward": {stick: ebiten.StandardGamepadAxisLeftStickVertical, v: -1},
+		"glide right":  {stick: ebiten.StandardGamepadAxisLeftStickHorizontal, v: 1},
+		"look right":   {stick: ebiten.StandardGamepadAxisRightStickHorizontal, v: 1},
+		"look up":      {stick: ebiten.StandardGamepadAxisRightStickVertical, v: -1},
+	}
+	for name, bs := range map[string][]shad.Button{
+		"up": k.PadUp, "down": k.PadDown, "roll left": k.PadRollLeft,
+		"roll right": k.PadRollRight, "shrink": k.PadShrink, "grow": k.PadGrow,
+	} {
+		if len(bs) == 0 {
+			t.Errorf("%s has no button", name)
+			continue
+		}
+		controls[name] = pad{button: bs[0], stick: -1, v: 1}
+	}
+	controls["resting stick"] = pad{stick: ebiten.StandardGamepadAxisLeftStickVertical, v: 0.1}
+	for name, c := range controls {
+		d := New(DefaultOptions())
+		f := shad.FirstFrame(&d, 0)
+		start := f.Cam
+		for range 6 {
+			in := shad.ScriptedInput(1.0 / 30)
+			if c.stick >= 0 {
+				in.WithStick(c.stick, c.v)
+			} else {
+				in.WithButton(c.button, c.v)
+			}
+			shad.RunFrame(&d, f, in)
+		}
+		if moved := f.Cam != start; moved != (name != "resting stick") {
+			t.Errorf("%s: camera moved = %v", name, moved)
+		}
+	}
+}
+
 // With no input the camera stays exactly the same, bit for bit: the app
 // treats any change as movement.
 func TestCameraStillWithoutInput(t *testing.T) {
