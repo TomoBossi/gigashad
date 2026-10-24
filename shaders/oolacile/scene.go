@@ -125,12 +125,12 @@ func newExplorer() *fractal.Explorer {
 		GPUMinScale: 5e-10,
 		// Plain floats on the GPU match the CPU down to about 2e-5.
 		GPUFastMinScale: 5e-5,
-		Fog:             shad.V3(0.015, 0.02, 0.05),
+		Fog:             shad.V3(0.012, 0.028, 0.045),
 	}
 	e.StepFog = &stepFog
 	e.Material = material
 	e.Background = func(dir shad.Vec3, glow float64, fr *shad.Frame) shad.Vec3 {
-		return e.Fog.Add(shad.V3(0.2, 0.4, 0.8).Mul(glow * glow * 0.6))
+		return e.Fog.Add(shad.V3(0.15, 0.5, 0.75).Mul(glow * glow * 0.6))
 	}
 	return e
 }
@@ -149,10 +149,10 @@ func startPlayer() shad.Player {
 
 var (
 	lightDir = shad.V3(0.3, 0.8, 0.5).Norm()
-	teal     = shad.V3(0.06, 0.20, 0.40)
-	deep     = shad.V3(0.04, 0.05, 0.17)
-	moss     = shad.V3(0.17, 0.10, 0.32)
-	cyan     = shad.V3(0.35, 0.65, 1.0)
+	teal     = shad.V3(0.055, 0.27, 0.37)
+	deep     = shad.V3(0.03, 0.075, 0.165)
+	moss     = shad.V3(0.11, 0.20, 0.26)
+	cyan     = shad.V3(0.27, 0.8, 1.0)
 )
 
 func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
@@ -183,7 +183,7 @@ func material(h *fractal.Hit, f *shad.Frame) shad.Vec3 {
 // Mandelbulb3D's, hence the much higher gain and lower threshold).
 var stepFog = fractal.StepFog{
 	// The file's fog color is 23/203/255; shifted a little toward blue.
-	Color:      shad.V3(40, 165, 255).Div(255),
+	Color:      shad.V3(30, 185, 255).Div(255),
 	Dense:      shad.V3(1, 1, 1),
 	Threshold:  0.2 * 1.2 * (137 - math.Sqrt(104)*11.313708) * (2.2 / 0.1) * 0.28,
 	DepthSlope: (2.2 / 0.1) * 0.7 / (181.788224833822 + 0.995421852006086) * (128 - 11.313708) * 0.002,
